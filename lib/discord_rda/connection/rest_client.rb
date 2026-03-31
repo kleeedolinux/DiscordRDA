@@ -3,6 +3,7 @@
 require 'async/http/internet'
 require 'async/http/endpoint'
 require 'cgi'
+require 'net/http/post/multipart'
 
 module DiscordRDA
   # HTTP client for Discord REST API.
@@ -59,9 +60,14 @@ module DiscordRDA
     # @param body [Object] Request body
     # @param params [Hash] Query parameters
     # @param headers [Hash] Additional headers
+    # @param files [Hash] Files to upload (field_name => File or IO)
     # @return [Hash] Response data
-    def post(path, body: nil, params: {}, headers: {})
-      request(:post, path, body: body, params: params, headers: headers)
+    def post(path, body: nil, params: {}, headers: {}, files: nil)
+      if files
+        request_multipart(:post, path, body: body, files: files, params: params, headers: headers)
+      else
+        request(:post, path, body: body, params: params, headers: headers)
+      end
     end
 
     # Make a PUT request
@@ -69,9 +75,14 @@ module DiscordRDA
     # @param body [Object] Request body
     # @param params [Hash] Query parameters
     # @param headers [Hash] Additional headers
+    # @param files [Hash] Files to upload (field_name => File or IO)
     # @return [Hash] Response data
-    def put(path, body: nil, params: {}, headers: {})
-      request(:put, path, body: body, params: params, headers: headers)
+    def put(path, body: nil, params: {}, headers: {}, files: nil)
+      if files
+        request_multipart(:put, path, body: body, files: files, params: params, headers: headers)
+      else
+        request(:put, path, body: body, params: params, headers: headers)
+      end
     end
 
     # Make a PATCH request
@@ -79,9 +90,14 @@ module DiscordRDA
     # @param body [Object] Request body
     # @param params [Hash] Query parameters
     # @param headers [Hash] Additional headers
+    # @param files [Hash] Files to upload (field_name => File or IO)
     # @return [Hash] Response data
-    def patch(path, body: nil, params: {}, headers: {})
-      request(:patch, path, body: body, params: params, headers: headers)
+    def patch(path, body: nil, params: {}, headers: {}, files: nil)
+      if files
+        request_multipart(:patch, path, body: body, files: files, params: params, headers: headers)
+      else
+        request(:patch, path, body: body, params: params, headers: headers)
+      end
     end
 
     # Make a DELETE request
@@ -160,6 +176,89 @@ module DiscordRDA
         @internet.delete(url, headers)
       else
         raise ArgumentError, "Unknown HTTP method: #{method}"
+      end
+    end
+
+    def request_multipart(method, path, body: nil, files: {}, params: {}, headers: {})
+      require 'securerandom'
+
+      url = build_url(path, params)
+      route = extract_route(method, path)
+
+      # Wait for rate limit
+      @rate_limiter.acquire(route)
+
+      # Build multipart body
+      boundary = SecureRandom.hex(16)
+      multipart_headers = headers.merge(
+        'Authorization' => "Bot #{@config.token}",
+        'User-Agent' => "DiscordRDA (https://github.com/juliaklee/discord_rda, #{VERSION})",
+        'Content-Type' => "multipart/form-data; boundary=#{boundary}"
+      )
+
+      # Build multipart body manually for Async::HTTP compatibility
+      parts = []
+
+      # Add JSON payload as 'payload_json' field if body provided
+      if body
+        parts << build_multipart_field('payload_json', Oj.dump(body, mode: :compat), boundary)
+      end
+
+      # Add files
+      files.each do |field_name, file|
+        parts << build_multipart_file(field_name, file, boundary)
+      end
+
+      # Close boundary
+      parts << "--#{boundary}--\r\n"
+
+      multipart_body = parts.join
+
+      start_time = Time.now
+      response = make_multipart_http_request(method, url, multipart_body, multipart_headers)
+      duration = Time.now - start_time
+
+      # Update rate limit info
+      @rate_limiter.update(route, response)
+
+      # Log request
+      @logger&.debug('REST request', method: method, path: path, status: response.status, duration: duration)
+
+      # Handle response
+      handle_response(response)
+    rescue => e
+      @logger&.error('REST request failed', method: method, path: path, error: e)
+      raise
+    end
+
+    def build_multipart_field(name, value, boundary)
+      "--#{boundary}\r\n" \
+      "Content-Disposition: form-data; name=\"#{name}\"\r\n" \
+      "Content-Type: application/json\r\n\r\n" \
+      "#{value}\r\n"
+    end
+
+    def build_multipart_file(field_name, file, boundary)
+      filename = file.respond_to?(:original_filename) ? file.original_filename : File.basename(file.path)
+      content_type = file.respond_to?(:content_type) ? file.content_type : 'application/octet-stream'
+      content = file.respond_to?(:read) ? file.read : File.read(file)
+
+      "--#{boundary}\r\n" \
+      "Content-Disposition: form-data; name=\"#{field_name}\"; filename=\"#{filename}\"\r\n" \
+      "Content-Type: #{content_type}\r\n\r\n" \
+      "#{content}\r\n"
+    end
+
+    def make_multipart_http_request(method, url, body, headers)
+      case method
+      when :post
+        @internet.post(url, headers, body)
+      when :put
+        @internet.put(url, headers, body)
+      when :patch
+        @internet.patch(url, headers, body)
+      else
+        raise ArgumentError, "Multipart not supported for #{method}"
       end
     end
 

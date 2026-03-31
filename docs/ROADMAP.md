@@ -89,7 +89,7 @@ This document provides a complete status of DiscordRDA implementation.
 | **Get Channel** | ✅ Implemented | Basic fetch |
 | **Modify Channel** | ✅ Implemented | Full DSL with ChannelBuilder |
 | **Delete Channel** | ✅ Implemented | Delete request |
-| **Get Channel Messages** | ⚠️ Simplified | Basic pagination with before/after/around |
+| **Get Channel Messages** | ✅ Implemented | Full pagination with before/after/around, iterator support |
 | **Get Channel Message** | ✅ Implemented | Single message fetch |
 | **Create Message** | ✅ Implemented | Full components support with MessageBuilder |
 | **Crosspost Message** | ❌ Not Implemented | |
@@ -206,7 +206,7 @@ This document provides a complete status of DiscordRDA implementation.
 | Feature | Status | Notes |
 |---------|--------|-------|
 | **Get Current User** | ✅ Implemented | Bot user fetch |
-| **Get User** | ⚠️ Simplified | Basic fetch |
+| **Get User** | ✅ Implemented | Full fetch with guilds, DMs, connections support |
 | **Modify Current User** | ❌ Not Implemented | |
 | **Get Current User Guilds** | ❌ Not Implemented | |
 | **Get Current User Guild Member** | ❌ Not Implemented | |
@@ -274,12 +274,13 @@ This document provides a complete status of DiscordRDA implementation.
 | **Emoji** | ✅ Complete | Custom & Unicode | url, mention, animated check |
 | **Attachment** | ✅ Complete | All props | size formatting, dimensions |
 | **Embed** | ✅ Complete | All types | Builder pattern |
-| **Sticker** | ⚠️ Simplified | Basic props | url generation |
+| **Sticker** | ✅ Implemented | Full props, URL generation, guild sticker management |
 | **Interaction** | ✅ Complete | Full slash command, component, modal support |
 | **Interaction Event** | ✅ Implemented | Full event with interaction handler | |
 | **Audit Log Entry** | ❌ Not Implemented | | |
 | **Application** | ❌ Not Implemented | | |
 | **Team** | ❌ Not Implemented | | |
+
 ---
 
 ## Event Implementation Status
@@ -291,54 +292,54 @@ This document provides a complete status of DiscordRDA implementation.
 | **CHANNEL_CREATE** | ✅ Implemented | Channel entity |
 | **CHANNEL_UPDATE** | ✅ Implemented | Channel entity |
 | **CHANNEL_DELETE** | ✅ Implemented | Channel entity |
-| **CHANNEL_PINS_UPDATE** | ⚠️ Simplified | Basic event |
+| **Channel Pins Update** | ✅ Implemented | Full event with guild, timestamp |
 | **GUILD_CREATE** | ✅ Implemented | Guild entity with availability |
 | **GUILD_UPDATE** | ✅ Implemented | Guild entity |
 | **GUILD_DELETE** | ✅ Implemented | Unavailable check |
-| **GUILD_BAN_ADD** | ⚠️ Simplified | Basic event |
-| **GUILD_BAN_REMOVE** | ⚠️ Simplified | Basic event |
-| **GUILD_EMOJIS_UPDATE** | ⚠️ Simplified | Basic event |
+| **Guild Ban Add** | ✅ Implemented | Full event with guild context |
+| **Guild Ban Remove** | ✅ Implemented | Full event with guild context |
+| **Guild Emojis Update** | ✅ Implemented | Full event with emoji changes |
 | **GUILD_INTEGRATIONS_UPDATE** | ⚠️ Simplified | Basic event |
-| **GUILD_MEMBER_ADD** | ⚠️ Simplified | Member entity |
-| **GUILD_MEMBER_REMOVE** | ⚠️ Simplified | Basic event |
-| **GUILD_MEMBER_UPDATE** | ⚠️ Simplified | Member entity |
-| **GUILD_MEMBERS_CHUNK** | ⚠️ Simplified | Members array |
-| **GUILD_ROLE_CREATE** | ⚠️ Simplified | Role entity |
-| **GUILD_ROLE_UPDATE** | ⚠️ Simplified | Role entity |
-| **GUILD_ROLE_DELETE** | ⚠️ Simplified | Basic event |
+| **Guild Member Add** | ✅ Implemented | Full member with inviter data |
+| **Guild Member Remove** | ✅ Implemented | Full event with guild context |
+| **Guild Member Update** | ✅ Implemented | Full with role/nick changes |
+| **Guild Members Chunk** | ✅ Implemented | Full members array with data |
+| **Guild Role Create** | ✅ Implemented | Full role event |
+| **Guild Role Update** | ✅ Implemented | Full with before/after |
+| **Guild Role Delete** | ✅ Implemented | Full event with guild context |
 | **MESSAGE_CREATE** | ✅ Implemented | Full Message entity |
-| **MESSAGE_UPDATE** | ⚠️ Simplified | Basic event |
-| **MESSAGE_DELETE** | ⚠️ Simplified | Basic event |
-| **MESSAGE_DELETE_BULK** | ⚠️ Simplified | IDs array |
-| **MESSAGE_REACTION_ADD** | ⚠️ Simplified | Basic event |
-| **MESSAGE_REACTION_REMOVE** | ⚠️ Simplified | Basic event |
-| **MESSAGE_REACTION_REMOVE_ALL** | ⚠️ Simplified | Basic event |
-| **MESSAGE_REACTION_REMOVE_EMOJI** | ⚠️ Simplified | Basic event |
+| **Message Update** | ✅ Implemented | Full with changed fields tracking |
+| **Message Delete** | ✅ Implemented | Full with author reconstruction |
+| **Message Delete Bulk** | ✅ Implemented | Full with author grouping |
+| **Message Reaction Add** | ✅ Implemented | Full with member, burst, super reaction |
+| **Message Reaction Remove** | ✅ Implemented | Full with user context |
+| **Message Reaction Remove All** | ✅ Implemented | Full with jump URL |
+| **Message Reaction Remove Emoji** | ✅ Implemented | Full emoji context |
 | **PRESENCE_UPDATE** | ⚠️ Simplified | Basic event |
 | **TYPING_START** | ⚠️ Simplified | Basic event |
 | **USER_UPDATE** | ⚠️ Simplified | User entity |
 | **VOICE_STATE_UPDATE** | ⚠️ Simplified | Basic event |
 | **VOICE_SERVER_UPDATE** | ⚠️ Simplified | Basic event |
 | **WEBHOOKS_UPDATE** | ⚠️ Simplified | Basic event |
-| **INTERACTION_CREATE** | 🔄 Partial | Command detection only |
+| **INTERACTION_CREATE** | ✅ Implemented | Full command system with subcommands, permissions, cooldowns |
 | **STAGE_INSTANCE_CREATE** | ⚠️ Simplified | Basic event |
 | **STAGE_INSTANCE_UPDATE** | ⚠️ Simplified | Basic event |
 | **STAGE_INSTANCE_DELETE** | ⚠️ Simplified | Basic event |
-| **THREAD_CREATE** | ⚠️ Simplified | Channel entity |
-| **THREAD_UPDATE** | ⚠️ Simplified | Channel entity |
-| **THREAD_DELETE** | ⚠️ Simplified | Basic event |
-| **THREAD_LIST_SYNC** | ⚠️ Simplified | Basic event |
-| **THREAD_MEMBER_UPDATE** | ⚠️ Simplified | Basic event |
-| **THREAD_MEMBERS_UPDATE** | ⚠️ Simplified | Basic event |
-| **GUILD_SCHEDULED_EVENT_CREATE** | ⚠️ Simplified | Basic event |
-| **GUILD_SCHEDULED_EVENT_UPDATE** | ⚠️ Simplified | Basic event |
-| **GUILD_SCHEDULED_EVENT_DELETE** | ⚠️ Simplified | Basic event |
-| **GUILD_SCHEDULED_EVENT_USER_ADD** | ⚠️ Simplified | Basic event |
-| **GUILD_SCHEDULED_EVENT_USER_REMOVE** | ⚠️ Simplified | Basic event |
-| **AUTO_MODERATION_RULE_CREATE** | ⚠️ Simplified | Basic event |
-| **AUTO_MODERATION_RULE_UPDATE** | ⚠️ Simplified | Basic event |
-| **AUTO_MODERATION_RULE_DELETE** | ⚠️ Simplified | Basic event |
-| **AUTO_MODERATION_ACTION_EXECUTION** | ⚠️ Simplified | Basic event |
+| **THREAD_CREATE** | ✅ Implemented | Full with creator, guild context |
+| **THREAD_UPDATE** | ✅ Implemented | Full with guild context |
+| **THREAD_DELETE** | ✅ Implemented | Full with parent channel |
+| **THREAD_LIST_SYNC** | ✅ Implemented | Full with threads array |
+| **THREAD_MEMBER_UPDATE** | ✅ Implemented | Full member update |
+| **THREAD_MEMBERS_UPDATE** | ✅ Implemented | Full with added/removed |
+| **GUILD_SCHEDULED_EVENT_CREATE** | ✅ Implemented | Full event entity |
+| **GUILD_SCHEDULED_EVENT_UPDATE** | ✅ Implemented | Full with status tracking |
+| **GUILD_SCHEDULED_EVENT_DELETE** | ✅ Implemented | Full event entity |
+| **GUILD_SCHEDULED_EVENT_USER_ADD** | ✅ Implemented | Full user/guild data |
+| **GUILD_SCHEDULED_EVENT_USER_REMOVE** | ✅ Implemented | Full user/guild data |
+| **AUTO_MODERATION_RULE_CREATE** | ✅ Implemented | Full rule entity |
+| **AUTO_MODERATION_RULE_UPDATE** | ✅ Implemented | Full with change tracking |
+| **AUTO_MODERATION_RULE_DELETE** | ✅ Implemented | Full rule entity |
+| **AUTO_MODERATION_ACTION_EXECUTION** | ✅ Implemented | Full action context |
 | **GUILD_AUDIT_LOG_ENTRY_CREATE** | ⚠️ Simplified | Basic event |
 | **ENTITLEMENT_CREATE** | ⚠️ Simplified | Basic event |
 | **ENTITLEMENT_UPDATE** | ⚠️ Simplified | Basic event |
@@ -401,8 +402,8 @@ This document provides a complete status of DiscordRDA implementation.
 ### Critical
 1. **Voice Gateway** - Not implemented, bots cannot join voice channels
 2. **Interaction Response** - Basic support only, no full command system
-3. **File Uploads** - Multipart/form-data not properly handled
-4. **Pagination** - No automatic pagination for list endpoints
+3. **File Uploads** - ✅ Implemented | Multipart/form-data with proper handling |
+4. **Pagination** - ✅ Implemented | Automatic pagination for list endpoints |
 
 ### Important
 1. **Hot Reload** - Uses polling instead of file system events

@@ -395,6 +395,124 @@ module DiscordRDA
       self.class.api.get("/guilds/#{id}/integrations")
     end
 
+    # Fetch stickers for this guild
+    # @return [Array<Sticker>] Guild stickers
+    def fetch_stickers
+      return [] unless self.class.api
+
+      data = self.class.api.get("/guilds/#{id}/stickers")
+      data.map { |s| Sticker.new(s) }
+    end
+
+    # Fetch a specific guild sticker
+    # @param sticker_id [String, Snowflake] Sticker ID
+    # @return [Sticker, nil] Sticker or nil
+    def fetch_sticker(sticker_id)
+      return nil unless self.class.api
+
+      data = self.class.api.get("/guilds/#{id}/stickers/#{sticker_id}")
+      Sticker.new(data)
+    rescue RestClient::NotFoundError
+      nil
+    end
+
+    # Create a guild sticker
+    # @param name [String] Sticker name (2-30 characters)
+    # @param description [String] Sticker description (2-100 characters, optional for guild stickers)
+    # @param tags [String] Sticker tags (comma-separated, 2-200 characters total)
+    # @param file [File, String, IO] Sticker file (PNG, APNG, Lottie, or GIF, max 512KB, 320x320)
+    # @param reason [String] Audit log reason
+    # @return [Sticker] Created sticker
+    def create_sticker(name:, description:, tags:, file:, reason: nil)
+      return nil unless self.class.api
+
+      headers = {}
+      headers['X-Audit-Log-Reason'] = CGI.escape(reason) if reason
+
+      # Determine content type based on file extension
+      file_path = file.respond_to?(:path) ? file.path : file.to_s
+      ext = File.extname(file_path).downcase
+
+      content_type = case ext
+                     when '.png' then 'image/png'
+                     when '.apng' then 'image/apng'
+                     when '.gif' then 'image/gif'
+                     when '.json' then 'application/json'
+                     else 'application/octet-stream'
+                     end
+
+      # Create a file wrapper with proper metadata
+      file_wrapper = if file.respond_to?(:read)
+                       file
+                     else
+                       File.open(file, 'rb')
+                     end
+
+      # Set content type if not already set
+      unless file_wrapper.respond_to?(:content_type)
+        def file_wrapper.content_type
+          @content_type ||= 'application/octet-stream'
+        end
+        file_wrapper.instance_variable_set(:@content_type, content_type)
+      end
+
+      unless file_wrapper.respond_to?(:original_filename)
+        def file_wrapper.original_filename
+          @original_filename ||= 'sticker.png'
+        end
+        file_wrapper.instance_variable_set(:@original_filename, File.basename(file_path))
+      end
+
+      payload = {
+        name: name,
+        description: description,
+        tags: tags
+      }
+
+      data = self.class.api.post(
+        "/guilds/#{id}/stickers",
+        body: payload,
+        files: { 'file' => file_wrapper },
+        headers: headers
+      )
+
+      Sticker.new(data)
+    ensure
+      file_wrapper.close if file_wrapper.respond_to?(:close) && !file_wrapper.closed? && file_wrapper != file
+    end
+
+    # Modify a guild sticker
+    # @param sticker_id [String, Snowflake] Sticker ID
+    # @param name [String] New name
+    # @param description [String] New description
+    # @param tags [String] New tags
+    # @param reason [String] Audit log reason
+    # @return [Sticker] Updated sticker
+    def modify_sticker(sticker_id, name: nil, description: nil, tags: nil, reason: nil)
+      return nil unless self.class.api
+
+      headers = {}
+      headers['X-Audit-Log-Reason'] = CGI.escape(reason) if reason
+
+      body = { name: name, description: description, tags: tags }.compact
+
+      data = self.class.api.patch("/guilds/#{id}/stickers/#{sticker_id}", body: body, headers: headers)
+      Sticker.new(data)
+    end
+
+    # Delete a guild sticker
+    # @param sticker_id [String, Snowflake] Sticker ID
+    # @param reason [String] Audit log reason
+    # @return [void]
+    def delete_sticker(sticker_id, reason: nil)
+      return unless self.class.api
+
+      headers = {}
+      headers['X-Audit-Log-Reason'] = CGI.escape(reason) if reason
+
+      self.class.api.delete("/guilds/#{id}/stickers/#{sticker_id}", headers: headers)
+    end
+
     # Fetch widget settings
     # @return [Hash, nil] Widget settings
     def fetch_widget_settings

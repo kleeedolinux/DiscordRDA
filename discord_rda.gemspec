@@ -24,6 +24,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'async-websocket', '~> 0.30'
   spec.add_dependency 'oj', '~> 3.16'
   spec.add_dependency 'timers', '~> 4.3'
+  spec.add_dependency 'multipart-post', '~> 2.4'
 
   # Optional dependencies
   spec.add_dependency 'redis', '~> 5.2'

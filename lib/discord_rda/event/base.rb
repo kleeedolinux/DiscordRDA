@@ -469,8 +469,77 @@ module DiscordRDA
       @data['channel_id']
     end
 
+    def guild_id
+      @data['guild_id']
+    end
+
     def edited?
       true
+    end
+
+    def edited_timestamp
+      @data['edited_timestamp']
+    end
+
+    def author
+      @author ||= User.new(@data['author']) if @data['author']
+    end
+
+    def member
+      return nil unless @data['member']
+      @member ||= Member.new(@data['author'].merge('member' => @data['member'], 'guild_id' => guild_id))
+    end
+
+    def content
+      @data['content']
+    end
+
+    def embeds
+      @data['embeds'] || []
+    end
+
+    def attachments
+      @data['attachments'] || []
+    end
+
+    def components
+      @data['components'] || []
+    end
+
+    def mentions
+      @data['mentions'] || []
+    end
+
+    def mention_roles
+      @data['mention_roles'] || []
+    end
+
+    def pinned
+      @data['pinned']
+    end
+
+    def flags
+      @data['flags']
+    end
+
+    def changed_fields
+      @data.keys - %w[id channel_id guild_id]
+    end
+
+    def content_changed?
+      @data.key?('content')
+    end
+
+    def embeds_changed?
+      @data.key?('embeds')
+    end
+
+    def attachments_changed?
+      @data.key?('attachments')
+    end
+
+    def components_changed?
+      @data.key?('components')
     end
   end
 
@@ -489,6 +558,41 @@ module DiscordRDA
 
     def guild_id
       @data['guild_id']
+    end
+
+    def message
+      @message ||= begin
+        # Try to reconstruct partial message from available data
+        if @data['author'] || @data['content'] || @data['embeds']
+          Message.new(@data.merge('id' => message_id, 'deleted' => true))
+        else
+          nil
+        end
+      end
+    end
+
+    def author
+      @author ||= User.new(@data['author']) if @data['author']
+    end
+
+    def content
+      @data['content']
+    end
+
+    def guild?
+      !guild_id.nil?
+    end
+
+    def dm?
+      guild_id.nil?
+    end
+
+    def jump_url
+      if guild_id
+        "https://discord.com/channels/#{guild_id}/#{channel_id}/#{message_id}"
+      else
+        "https://discord.com/channels/@me/#{channel_id}/#{message_id}"
+      end
     end
   end
 
@@ -511,6 +615,30 @@ module DiscordRDA
 
     def count
       message_ids.length
+    end
+
+    def messages
+      @messages ||= (@data['messages'] || []).map { |m| Message.new(m.merge('deleted' => true)) }
+    end
+
+    def author_ids
+      messages.map { |m| m.author&.id }.compact.uniq
+    end
+
+    def messages_by_author
+      messages.group_by { |m| m.author&.id }
+    end
+
+    def bulk_delete?
+      count > 1
+    end
+
+    def jump_url(message_id)
+      if guild_id
+        "https://discord.com/channels/#{guild_id}/#{channel_id}/#{message_id}"
+      else
+        "https://discord.com/channels/@me/#{channel_id}/#{message_id}"
+      end
     end
   end
 
@@ -536,8 +664,57 @@ module DiscordRDA
       @user ||= User.new(@data['member'] || @data['user']) if @data['member'] || @data['user']
     end
 
+    def member
+      return nil unless @data['member']
+      @member ||= Member.new(@data['member'].merge('user' => @data['user'], 'guild_id' => guild_id))
+    end
+
     def emoji
       @emoji ||= Emoji.new(@data['emoji']) if @data['emoji']
+    end
+
+    def message_author_id
+      @data['message_author_id']
+    end
+
+    def burst
+      @data['burst'] || false
+    end
+
+    def burst_colors
+      @data['burst_colors'] || []
+    end
+
+    def type
+      @data['type']
+    end
+
+    def normal?
+      type == 0
+    end
+
+    def super?
+      type == 1
+    end
+
+    def guild?
+      !guild_id.nil?
+    end
+
+    def dm?
+      guild_id.nil?
+    end
+
+    def animated_emoji?
+      emoji&.animated?
+    end
+
+    def custom_emoji?
+      emoji&.custom?
+    end
+
+    def unicode_emoji?
+      emoji&.unicode?
     end
   end
 
@@ -562,8 +739,36 @@ module DiscordRDA
       @data['user_id']
     end
 
+    def user
+      @user ||= User.new(@data['user']) if @data['user']
+    end
+
     def emoji
       @emoji ||= Emoji.new(@data['emoji']) if @data['emoji']
+    end
+
+    def burst
+      @data['burst'] || false
+    end
+
+    def type
+      @data['type']
+    end
+
+    def normal?
+      type == 0
+    end
+
+    def super?
+      type == 1
+    end
+
+    def guild?
+      !guild_id.nil?
+    end
+
+    def dm?
+      guild_id.nil?
     end
   end
 
@@ -582,6 +787,22 @@ module DiscordRDA
 
     def guild_id
       @data['guild_id']
+    end
+
+    def guild?
+      !guild_id.nil?
+    end
+
+    def dm?
+      guild_id.nil?
+    end
+
+    def jump_url
+      if guild_id
+        "https://discord.com/channels/#{guild_id}/#{channel_id}/#{message_id}"
+      else
+        "https://discord.com/channels/@me/#{channel_id}/#{message_id}"
+      end
     end
   end
 
@@ -627,6 +848,18 @@ module DiscordRDA
     def newly_created?
       @data['newly_created'] || false
     end
+
+    def guild_id
+      @data['guild_id']
+    end
+
+    def parent_id
+      @data['parent_id']
+    end
+
+    def creator_id
+      @data['owner_id']
+    end
   end
 
   class ThreadUpdateEvent < Event
@@ -636,6 +869,14 @@ module DiscordRDA
 
     def thread
       @thread ||= Channel.new(@data)
+    end
+
+    def guild_id
+      @data['guild_id']
+    end
+
+    def parent_id
+      @data['parent_id']
     end
   end
 
@@ -658,6 +899,88 @@ module DiscordRDA
 
     def type
       @data['type']
+    end
+  end
+
+  class ThreadListSyncEvent < Event
+    def initialize(data, shard_id:)
+      super('THREAD_LIST_SYNC', data, shard_id: shard_id)
+    end
+
+    def guild_id
+      @data['guild_id']
+    end
+
+    def channel_ids
+      @data['channel_ids'] || []
+    end
+
+    def threads
+      @threads ||= (@data['threads'] || []).map { |t| Channel.new(t) }
+    end
+
+    def members
+      @data['members'] || []
+    end
+
+    def thread_count
+      threads.length
+    end
+  end
+
+  class ThreadMemberUpdateEvent < Event
+    def initialize(data, shard_id:)
+      super('THREAD_MEMBER_UPDATE', data, shard_id: shard_id)
+    end
+
+    def thread_id
+      @data['id']
+    end
+
+    def guild_id
+      @data['guild_id']
+    end
+
+    def member
+      @member ||= @data['member']
+    end
+
+    def user_id
+      @data['user_id']
+    end
+
+    def join_timestamp
+      @data['join_timestamp']
+    end
+
+    def flags
+      @data['flags']
+    end
+  end
+
+  class ThreadMembersUpdateEvent < Event
+    def initialize(data, shard_id:)
+      super('THREAD_MEMBERS_UPDATE', data, shard_id: shard_id)
+    end
+
+    def thread_id
+      @data['id']
+    end
+
+    def guild_id
+      @data['guild_id']
+    end
+
+    def member_count
+      @data['member_count']
+    end
+
+    def added_members
+      @added_members ||= (@data['added_members'] || []).map { |m| Member.new(m.merge('guild_id' => guild_id)) }
+    end
+
+    def removed_member_ids
+      @data['removed_member_ids'] || []
     end
   end
 end

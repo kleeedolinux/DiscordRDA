@@ -1,10 +1,18 @@
 # frozen_string_literal: true
 
+require 'base64'
+require_relative 'channel'
+
 module DiscordRDA
   # Represents a Discord user.
   # Users are account-wide and not guild-specific.
   #
   class User < Entity
+    # Class-level API client
+    class << self
+      attr_accessor :api
+    end
+
     attribute :username, type: :string
     attribute :discriminator, type: :string
     attribute :global_name, type: :string
@@ -110,6 +118,114 @@ module DiscordRDA
       return false unless flag_value
 
       (public_flags & flag_value) == flag_value
+    end
+
+    # Create a DM channel with this user
+    # @return [Channel, nil] DM channel
+    def create_dm_channel
+      return nil unless self.class.api
+
+      data = self.class.api.post('/users/@me/channels', body: { recipient_id: id.to_s })
+      Channel.new(data)
+    end
+
+    # Get guilds the current user is in
+    # @param limit [Integer] Max number of guilds (1-200, default 200)
+    # @param after [String] Get guilds after this guild ID
+    # @param before [String] Get guilds before this guild ID
+    # @param with_counts [Boolean] Include approximate member and presence counts
+    # @return [Array<Hash>] Guild objects (partial, not full Guild entities)
+    def self.get_current_user_guilds(limit: 200, after: nil, before: nil, with_counts: false)
+      return [] unless api
+
+      params = { limit: limit, with_counts: with_counts }
+      params[:after] = after if after
+      params[:before] = before if before
+
+      api.get('/users/@me/guilds', params: params)
+    end
+
+    # Leave a guild
+    # @param guild_id [String, Snowflake] Guild ID to leave
+    # @return [void]
+    def self.leave_guild(guild_id)
+      return unless api
+
+      api.delete("/users/@me/guilds/#{guild_id}")
+    end
+
+    # Get current user's guild member information
+    # @param guild_id [String, Snowflake] Guild ID
+    # @return [Hash, nil] Guild member object
+    def self.get_current_user_guild_member(guild_id)
+      return nil unless api
+
+      api.get("/users/@me/guilds/#{guild_id}/member")
+    rescue RestClient::NotFoundError
+      nil
+    end
+
+    # Modify the current user
+    # @param username [String] New username
+    # @param avatar [File, String] New avatar (file or base64 data URI)
+    # @return [User] Updated user
+    def self.modify_current_user(username: nil, avatar: nil)
+      return nil unless api
+
+      body = {}
+      body[:username] = username if username
+
+      if avatar
+        body[:avatar] = if avatar.respond_to?(:read)
+                          # Convert file to base64 data URI
+                          data = avatar.read
+                          base64 = Base64.strict_encode64(data)
+                          ext = File.extname(avatar.respond_to?(:path) ? avatar.path : 'png').delete('.')
+                          "data:image/#{ext};base64,#{base64}"
+                        else
+                          avatar
+                        end
+      end
+
+      data = api.patch('/users/@me', body: body)
+      User.new(data)
+    end
+
+    # Get user connections (for current user only)
+    # @return [Array<Hash>] Connected accounts
+    def self.get_connections
+      return [] unless api
+
+      api.get('/users/@me/connections')
+    end
+
+    # Get user's application role connection
+    # @param application_id [String, Snowflake] Application ID
+    # @return [Hash, nil] Role connection metadata
+    def self.get_application_role_connection(application_id)
+      return nil unless api
+
+      api.get("/users/@me/applications/#{application_id}/role-connection")
+    rescue RestClient::NotFoundError
+      nil
+    end
+
+    # Update user's application role connection
+    # @param application_id [String, Snowflake] Application ID
+    # @param platform_name [String] Platform name
+    # @param platform_username [String] Platform username
+    # @param metadata [Hash] Role connection metadata
+    # @return [Hash] Updated role connection
+    def self.update_application_role_connection(application_id, platform_name: nil, platform_username: nil, metadata: {})
+      return nil unless api
+
+      body = {
+        platform_name: platform_name,
+        platform_username: platform_username,
+        metadata: metadata
+      }.compact
+
+      api.put("/users/@me/applications/#{application_id}/role-connection", body: body)
     end
   end
 end

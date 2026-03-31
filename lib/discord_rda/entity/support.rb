@@ -241,6 +241,7 @@ module DiscordRDA
     attribute :available, type: :boolean, default: true
     attribute :user, type: :hash
     attribute :sort_value, type: :integer
+    attribute :pack_id, type: :snowflake
 
     # Check if standard sticker
     # @return [Boolean] True if standard

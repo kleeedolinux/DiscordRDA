@@ -55,6 +55,11 @@ module DiscordRDA
     attribute :default_sort_order, type: :integer
     attribute :default_forum_layout, type: :integer
 
+    # Class-level API client for REST operations
+    class << self
+      attr_accessor :api
+    end
+
     # Get channel type as symbol
     # @return [Symbol] Channel type
     def channel_type
@@ -269,6 +274,173 @@ module DiscordRDA
     # @return [Integer] Days
     def auto_archive_days
       (default_auto_archive_duration || 4320) / 1440 # Convert minutes to days, default 3 days
+    end
+
+    # Fetch messages from the channel with pagination support
+    # @param limit [Integer] Number of messages (1-100, default 50)
+    # @param before [String, Snowflake] Get messages before this message ID
+    # @param after [String, Snowflake] Get messages after this message ID
+    # @param around [String, Snowflake] Get messages around this message ID (returns 25 before + 25 after)
+    # @return [Array<Message>] Messages
+    def fetch_messages(limit: 50, before: nil, after: nil, around: nil)
+      return [] unless self.class.api
+
+      params = { limit: limit }
+      params[:before] = before.to_s if before
+      params[:after] = after.to_s if after
+      params[:around] = around.to_s if around
+
+      data = self.class.api.get("/channels/#{id}/messages", params: params)
+      data.map { |m| Message.new(m) }
+    end
+
+    # Fetch all messages from the channel with automatic pagination
+    # @param max [Integer] Maximum messages to fetch (nil for all)
+    # @param batch_size [Integer] Messages per request (1-100)
+    # @param direction [Symbol] :backwards (older first) or :forwards (newer first)
+    # @yield [Message] Optional block called for each message
+    # @return [Array<Message>] All fetched messages
+    def fetch_all_messages(max: nil, batch_size: 100, direction: :backwards)
+      return [] unless self.class.api
+
+      messages = []
+      last_id = nil
+
+      loop do
+        batch = if direction == :forwards
+                  fetch_messages(limit: batch_size, after: last_id)
+                else
+                  fetch_messages(limit: batch_size, before: last_id)
+                end
+
+        break if batch.empty?
+
+        batch.each do |message|
+          messages << message
+          yield message if block_given?
+
+          return messages if max && messages.length >= max
+        end
+
+        last_id = direction == :forwards ? batch.last.id : batch.last.id
+
+        # Stop if we got fewer messages than requested (reached the end)
+        break if batch.length < batch_size
+      end
+
+      messages
+    end
+
+    # Create an iterator for fetching messages
+    # @param batch_size [Integer] Messages per request (1-100)
+    # @param direction [Symbol] :backwards (older first) or :forwards (newer first)
+    # @return [MessageIterator] Iterator instance
+    def messages_iterator(batch_size: 100, direction: :backwards)
+      MessageIterator.new(self, batch_size: batch_size, direction: direction)
+    end
+
+    # Search for messages by content (client-side filtering)
+    # Note: Discord API doesn't support server-side message search, this fetches and filters
+    # @param content [String] Content to search for
+    # @param author_id [String] Filter by author ID
+    # @param limit [Integer] Maximum messages to search
+    # @return [Array<Message>] Matching messages
+    def search_messages(content: nil, author_id: nil, limit: 1000)
+      return [] unless self.class.api
+
+      results = []
+
+      fetch_all_messages(max: limit) do |message|
+        next if content && !message.content.to_s.downcase.include?(content.downcase)
+        next if author_id && message.author&.id.to_s != author_id.to_s
+
+        results << message
+      end
+
+      results
+    end
+  end
+
+  # Iterator for paginating through channel messages
+  class MessageIterator
+    include Enumerable
+
+    # @return [Channel] Channel being iterated
+    attr_reader :channel
+
+    # @return [Integer] Messages per batch
+    attr_reader :batch_size
+
+    # @return [Symbol] Direction (:backwards or :forwards)
+    attr_reader :direction
+
+    # Initialize iterator
+    # @param channel [Channel] Channel to iterate
+    # @param batch_size [Integer] Messages per batch
+    # @param direction [Symbol] :backwards (older first) or :forwards (newer first)
+    def initialize(channel, batch_size: 100, direction: :backwards)
+      @channel = channel
+      @batch_size = batch_size
+      @direction = direction
+      @last_id = nil
+      @buffer = []
+      @exhausted = false
+    end
+
+    # Get next message
+    # @return [Message, nil] Next message or nil if exhausted
+    def next
+      fill_buffer if @buffer.empty? && !@exhausted
+
+      @buffer.shift
+    end
+
+    # Check if there are more messages
+    # @return [Boolean] True if more messages available
+    def more?
+      !@exhausted || !@buffer.empty?
+    end
+
+    # Iterate over all messages
+    # @yield [Message]
+    def each
+      return to_enum unless block_given?
+
+      loop do
+        message = self.next
+        break unless message
+
+        yield message
+      end
+    end
+
+    # Reset the iterator
+    # @return [self]
+    def reset
+      @last_id = nil
+      @buffer = []
+      @exhausted = false
+      self
+    end
+
+    private
+
+    def fill_buffer
+      return if @exhausted
+
+      batch = if @direction == :forwards
+                @channel.fetch_messages(limit: @batch_size, after: @last_id)
+              else
+                @channel.fetch_messages(limit: @batch_size, before: @last_id)
+              end
+
+      if batch.empty?
+        @exhausted = true
+      else
+        @buffer = batch
+        @last_id = @direction == :forwards ? batch.last.id : batch.last.id
+        @exhausted = true if batch.length < @batch_size
+      end
     end
   end
 end
