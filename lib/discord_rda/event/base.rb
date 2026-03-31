@@ -267,38 +267,397 @@ module DiscordRDA
     end
 
     def component?
-      type == 3
-    end
-
-    def modal_submit?
-      type == 5
-    end
-  end
-
-  # InteractionCreateEvent - uses full Interaction class from interactions module
-  class InteractionCreateEvent < Event
-    def initialize(data, shard_id:)
-      super('INTERACTION_CREATE', data, shard_id: shard_id)
-    end
-
-    def interaction
-      @interaction ||= Interaction.new(@data)
-    end
-
-    def type
-      interaction.type
-    end
-
-    def command?
-      interaction.command?
-    end
-
-    def component?
       interaction.component?
     end
 
     def modal_submit?
       interaction.modal_submit?
+    end
+  end
+
+  # Channel events
+  class ChannelCreateEvent < Event
+    def initialize(data, shard_id:)
+      super('CHANNEL_CREATE', data, shard_id: shard_id)
+    end
+
+    def channel
+      @channel ||= Channel.new(@data)
+    end
+  end
+
+  class ChannelUpdateEvent < Event
+    def initialize(data, shard_id:)
+      super('CHANNEL_UPDATE', data, shard_id: shard_id)
+    end
+
+    def channel
+      @channel ||= Channel.new(@data)
+    end
+
+    def before
+      @data['before']
+    end
+
+    def after
+      channel
+    end
+  end
+
+  class ChannelDeleteEvent < Event
+    def initialize(data, shard_id:)
+      super('CHANNEL_DELETE', data, shard_id: shard_id)
+    end
+
+    def channel
+      @channel ||= Channel.new(@data)
+    end
+  end
+
+  class ChannelPinsUpdateEvent < Event
+    def initialize(data, shard_id:)
+      super('CHANNEL_PINS_UPDATE', data, shard_id: shard_id)
+    end
+
+    def channel_id
+      @data['channel_id']
+    end
+
+    def guild_id
+      @data['guild_id']
+    end
+
+    def last_pin_timestamp
+      @data['last_pin_timestamp']
+    end
+  end
+
+  # Guild events
+  class GuildUpdateEvent < Event
+    def initialize(data, shard_id:)
+      super('GUILD_UPDATE', data, shard_id: shard_id)
+    end
+
+    def guild
+      @guild ||= Guild.new(@data)
+    end
+  end
+
+  class GuildDeleteEvent < Event
+    def initialize(data, shard_id:)
+      super('GUILD_DELETE', data, shard_id: shard_id)
+    end
+
+    def guild_id
+      @data['id']
+    end
+
+    def unavailable?
+      @data['unavailable'] || false
+    end
+  end
+
+  # Member events
+  class GuildMemberAddEvent < Event
+    def initialize(data, shard_id:)
+      super('GUILD_MEMBER_ADD', data, shard_id: shard_id)
+    end
+
+    def member
+      @member ||= Member.new(@data)
+    end
+
+    def guild_id
+      @data['guild_id']
+    end
+  end
+
+  class GuildMemberRemoveEvent < Event
+    def initialize(data, shard_id:)
+      super('GUILD_MEMBER_REMOVE', data, shard_id: shard_id)
+    end
+
+    def user
+      @user ||= User.new(@data['user'])
+    end
+
+    def guild_id
+      @data['guild_id']
+    end
+  end
+
+  class GuildMemberUpdateEvent < Event
+    def initialize(data, shard_id:)
+      super('GUILD_MEMBER_UPDATE', data, shard_id: shard_id)
+    end
+
+    def member
+      @member ||= Member.new(@data)
+    end
+
+    def guild_id
+      @data['guild_id']
+    end
+
+    def roles
+      @data['roles'] || []
+    end
+
+    def nick
+      @data['nick']
+    end
+  end
+
+  # Role events
+  class GuildRoleCreateEvent < Event
+    def initialize(data, shard_id:)
+      super('GUILD_ROLE_CREATE', data, shard_id: shard_id)
+    end
+
+    def role
+      @role ||= Role.new(@data['role'].merge('guild_id' => @data['guild_id']))
+    end
+
+    def guild_id
+      @data['guild_id']
+    end
+  end
+
+  class GuildRoleUpdateEvent < Event
+    def initialize(data, shard_id:)
+      super('GUILD_ROLE_UPDATE', data, shard_id: shard_id)
+    end
+
+    def role
+      @role ||= Role.new(@data['role'].merge('guild_id' => @data['guild_id']))
+    end
+
+    def guild_id
+      @data['guild_id']
+    end
+  end
+
+  class GuildRoleDeleteEvent < Event
+    def initialize(data, shard_id:)
+      super('GUILD_ROLE_DELETE', data, shard_id: shard_id)
+    end
+
+    def role_id
+      @data['role_id']
+    end
+
+    def guild_id
+      @data['guild_id']
+    end
+  end
+
+  # Message events
+  class MessageUpdateEvent < Event
+    def initialize(data, shard_id:)
+      super('MESSAGE_UPDATE', data, shard_id: shard_id)
+    end
+
+    def message
+      @message ||= Message.new(@data)
+    end
+
+    def id
+      @data['id']
+    end
+
+    def channel_id
+      @data['channel_id']
+    end
+
+    def edited?
+      true
+    end
+  end
+
+  class MessageDeleteEvent < Event
+    def initialize(data, shard_id:)
+      super('MESSAGE_DELETE', data, shard_id: shard_id)
+    end
+
+    def message_id
+      @data['id']
+    end
+
+    def channel_id
+      @data['channel_id']
+    end
+
+    def guild_id
+      @data['guild_id']
+    end
+  end
+
+  class MessageDeleteBulkEvent < Event
+    def initialize(data, shard_id:)
+      super('MESSAGE_DELETE_BULK', data, shard_id: shard_id)
+    end
+
+    def message_ids
+      @data['ids'] || []
+    end
+
+    def channel_id
+      @data['channel_id']
+    end
+
+    def guild_id
+      @data['guild_id']
+    end
+
+    def count
+      message_ids.length
+    end
+  end
+
+  # Reaction events
+  class MessageReactionAddEvent < Event
+    def initialize(data, shard_id:)
+      super('MESSAGE_REACTION_ADD', data, shard_id: shard_id)
+    end
+
+    def message_id
+      @data['message_id']
+    end
+
+    def channel_id
+      @data['channel_id']
+    end
+
+    def guild_id
+      @data['guild_id']
+    end
+
+    def user
+      @user ||= User.new(@data['member'] || @data['user']) if @data['member'] || @data['user']
+    end
+
+    def emoji
+      @emoji ||= Emoji.new(@data['emoji']) if @data['emoji']
+    end
+  end
+
+  class MessageReactionRemoveEvent < Event
+    def initialize(data, shard_id:)
+      super('MESSAGE_REACTION_REMOVE', data, shard_id: shard_id)
+    end
+
+    def message_id
+      @data['message_id']
+    end
+
+    def channel_id
+      @data['channel_id']
+    end
+
+    def guild_id
+      @data['guild_id']
+    end
+
+    def user_id
+      @data['user_id']
+    end
+
+    def emoji
+      @emoji ||= Emoji.new(@data['emoji']) if @data['emoji']
+    end
+  end
+
+  class MessageReactionRemoveAllEvent < Event
+    def initialize(data, shard_id:)
+      super('MESSAGE_REACTION_REMOVE_ALL', data, shard_id: shard_id)
+    end
+
+    def message_id
+      @data['message_id']
+    end
+
+    def channel_id
+      @data['channel_id']
+    end
+
+    def guild_id
+      @data['guild_id']
+    end
+  end
+
+  # Ban events
+  class GuildBanAddEvent < Event
+    def initialize(data, shard_id:)
+      super('GUILD_BAN_ADD', data, shard_id: shard_id)
+    end
+
+    def user
+      @user ||= User.new(@data['user'])
+    end
+
+    def guild_id
+      @data['guild_id']
+    end
+  end
+
+  class GuildBanRemoveEvent < Event
+    def initialize(data, shard_id:)
+      super('GUILD_BAN_REMOVE', data, shard_id: shard_id)
+    end
+
+    def user
+      @user ||= User.new(@data['user'])
+    end
+
+    def guild_id
+      @data['guild_id']
+    end
+  end
+
+  # Thread events
+  class ThreadCreateEvent < Event
+    def initialize(data, shard_id:)
+      super('THREAD_CREATE', data, shard_id: shard_id)
+    end
+
+    def thread
+      @thread ||= Channel.new(@data)
+    end
+
+    def newly_created?
+      @data['newly_created'] || false
+    end
+  end
+
+  class ThreadUpdateEvent < Event
+    def initialize(data, shard_id:)
+      super('THREAD_UPDATE', data, shard_id: shard_id)
+    end
+
+    def thread
+      @thread ||= Channel.new(@data)
+    end
+  end
+
+  class ThreadDeleteEvent < Event
+    def initialize(data, shard_id:)
+      super('THREAD_DELETE', data, shard_id: shard_id)
+    end
+
+    def thread_id
+      @data['id']
+    end
+
+    def channel_id
+      @data['parent_id']
+    end
+
+    def guild_id
+      @data['guild_id']
+    end
+
+    def type
+      @data['type']
     end
   end
 end

@@ -75,7 +75,31 @@ module DiscordRDA
       @dependencies.all? { |dep| loaded_plugins.include?(dep) }
     end
 
-    # DSL for defining commands
+    # Register middleware with the bot
+    # @param bot [Bot] Bot instance
+    # @return [void]
+    def register_middleware(bot)
+      self.class.middlewares.each do |mw|
+        bot.use(mw)
+      end
+    end
+
+    # Plugin metadata
+    # @return [Hash] Metadata
+    def metadata
+      {
+        name: @name,
+        version: @version,
+        description: @description,
+        dependencies: @dependencies,
+        enabled: @enabled,
+        commands: self.class.commands.length,
+        handlers: self.class.handlers.length,
+        middlewares: self.class.middlewares.length
+      }
+    end
+
+    # DSL for defining plugin components
     class << self
       # Define a command
       # @param name [String] Command name
@@ -95,6 +119,25 @@ module DiscordRDA
         @handlers << { event: event, handler: block }
       end
 
+      # Define middleware
+      # @yield Middleware block
+      def middleware(&block)
+        @middlewares ||= []
+        @middlewares << block
+      end
+
+      # Define a before_setup hook
+      # @yield Block to run before setup
+      def before_setup(&block)
+        @before_setup = block
+      end
+
+      # Define an after_setup hook
+      # @yield Block to run after setup
+      def after_setup(&block)
+        @after_setup = block
+      end
+
       # Get defined commands
       # @return [Array<Hash>] Commands
       def commands
@@ -105,6 +148,24 @@ module DiscordRDA
       # @return [Array<Hash>] Handlers
       def handlers
         @handlers || []
+      end
+
+      # Get defined middlewares
+      # @return [Array<Proc>] Middlewares
+      def middlewares
+        @middlewares || []
+      end
+
+      # Get before_setup hook
+      # @return [Proc, nil] Hook
+      def before_setup_hook
+        @before_setup
+      end
+
+      # Get after_setup hook
+      # @return [Proc, nil] Hook
+      def after_setup_hook
+        @after_setup
       end
     end
 
@@ -124,20 +185,6 @@ module DiscordRDA
       self.class.handlers.each do |handler|
         bot.on(handler[:event], &handler[:handler])
       end
-    end
-
-    # Plugin metadata
-    # @return [Hash] Metadata
-    def metadata
-      {
-        name: @name,
-        version: @version,
-        description: @description,
-        dependencies: @dependencies,
-        enabled: @enabled,
-        commands: self.class.commands.length,
-        handlers: self.class.handlers.length
-      }
     end
   end
 end

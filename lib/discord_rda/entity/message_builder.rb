@@ -214,7 +214,57 @@ module DiscordRDA
       self
     end
 
-    # Add a select menu component
+    # Add a primary button (style 1)
+    # @param label [String] Button label
+    # @param custom_id [String] Custom ID for interaction
+    # @param emoji [String] Optional emoji
+    # @param disabled [Boolean] Whether disabled
+    # @return [self]
+    def primary_button(label:, custom_id:, emoji: nil, disabled: false)
+      button(style: 1, label: label, custom_id: custom_id, emoji: emoji, disabled: disabled)
+    end
+
+    # Add a secondary button (style 2)
+    # @param label [String] Button label
+    # @param custom_id [String] Custom ID for interaction
+    # @param emoji [String] Optional emoji
+    # @param disabled [Boolean] Whether disabled
+    # @return [self]
+    def secondary_button(label:, custom_id:, emoji: nil, disabled: false)
+      button(style: 2, label: label, custom_id: custom_id, emoji: emoji, disabled: disabled)
+    end
+
+    # Add a success button (style 3)
+    # @param label [String] Button label
+    # @param custom_id [String] Custom ID for interaction
+    # @param emoji [String] Optional emoji
+    # @param disabled [Boolean] Whether disabled
+    # @return [self]
+    def success_button(label:, custom_id:, emoji: nil, disabled: false)
+      button(style: 3, label: label, custom_id: custom_id, emoji: emoji, disabled: disabled)
+    end
+
+    # Add a danger button (style 4)
+    # @param label [String] Button label
+    # @param custom_id [String] Custom ID for interaction
+    # @param emoji [String] Optional emoji
+    # @param disabled [Boolean] Whether disabled
+    # @return [self]
+    def danger_button(label:, custom_id:, emoji: nil, disabled: false)
+      button(style: 4, label: label, custom_id: custom_id, emoji: emoji, disabled: disabled)
+    end
+
+    # Add a link button (style 5)
+    # @param label [String] Button label
+    # @param url [String] URL to open
+    # @param emoji [String] Optional emoji
+    # @param disabled [Boolean] Whether disabled
+    # @return [self]
+    def link_button(label:, url:, emoji: nil, disabled: false)
+      button(style: 5, label: label, url: url, emoji: emoji, disabled: disabled)
+    end
+
+    # Add a string select menu (type 3)
     # @param custom_id [String] Custom ID for select interaction
     # @param options [Array<Hash>] Select options
     # @param placeholder [String] Placeholder text
@@ -224,7 +274,7 @@ module DiscordRDA
     # @return [self]
     def select_menu(custom_id:, options:, placeholder: nil, min_values: 1, max_values: 1, disabled: false)
       menu = {
-        type: 3, # String select type
+        type: 3,
         custom_id: custom_id,
         options: options,
         min_values: min_values,
@@ -232,9 +282,88 @@ module DiscordRDA
         disabled: disabled
       }
       menu[:placeholder] = placeholder if placeholder
-
       @components << menu
       self
     end
-  end
-end
+
+    # Add a user select menu (type 5)
+    # @param custom_id [String] Custom ID for interaction
+    # @param placeholder [String] Placeholder text
+    # @param min_values [Integer] Minimum values
+    # @param max_values [Integer] Maximum values
+    # @param disabled [Boolean] Whether disabled
+    # @return [self]
+    def user_select(custom_id:, placeholder: nil, min_values: 1, max_values: 1, disabled: false)
+      menu = {
+        type: 5,
+        custom_id: custom_id,
+        min_values: min_values,
+        max_values: max_values,
+        disabled: disabled
+      }
+      menu[:placeholder] = placeholder if placeholder
+      @components << menu
+      self
+    end
+
+    # Add a role select menu (type 6)
+    # @param custom_id [String] Custom ID for interaction
+    # @param placeholder [String] Placeholder text
+    # @param min_values [Integer] Minimum values
+    # @param max_values [Integer] Maximum values
+    # @param disabled [Boolean] Whether disabled
+    # @return [self]
+    def role_select(custom_id:, placeholder: nil, min_values: 1, max_values: 1, disabled: false)
+      menu = {
+        type: 6,
+        custom_id: custom_id,
+        min_values: min_values,
+        max_values: max_values,
+        disabled: disabled
+      }
+      menu[:placeholder] = placeholder if placeholder
+      @components << menu
+      self
+    end
+
+    # Add a mentionable select menu (type 7)
+    # @param custom_id [String] Custom ID for interaction
+    # @param placeholder [String] Placeholder text
+    # @param min_values [Integer] Minimum values
+    # @param max_values [Integer] Maximum values
+    # @param disabled [Boolean] Whether disabled
+    # @return [self]
+    def mentionable_select(custom_id:, placeholder: nil, min_values: 1, max_values: 1, disabled: false)
+      menu = {
+        type: 7,
+        custom_id: custom_id,
+        min_values: min_values,
+        max_values: max_values,
+        disabled: disabled
+      }
+      menu[:placeholder] = placeholder if placeholder
+      @components << menu
+      self
+    end
+
+    # Add a channel select menu (type 8)
+    # @param custom_id [String] Custom ID for interaction
+    # @param placeholder [String] Placeholder text
+    # @param channel_types [Array<Integer>] Channel types to show
+    # @param min_values [Integer] Minimum values
+    # @param max_values [Integer] Maximum values
+    # @param disabled [Boolean] Whether disabled
+    # @return [self]
+    def channel_select(custom_id:, placeholder: nil, channel_types: nil, min_values: 1, max_values: 1, disabled: false)
+      menu = {
+        type: 8,
+        custom_id: custom_id,
+        min_values: min_values,
+        max_values: max_values,
+        disabled: disabled
+      }
+      menu[:placeholder] = placeholder if placeholder
+      menu[:channel_types] = channel_types if channel_types
+      @components << menu
+      self
+    end

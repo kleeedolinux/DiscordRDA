@@ -209,5 +209,66 @@ module DiscordRDA
     def directory?
       type == 14
     end
+
+    # Get slowmode delay in seconds
+    # @return [Integer] Rate limit per user
+    def slowmode_delay
+      rate_limit_per_user || 0
+    end
+
+    # Check if slowmode is enabled
+    # @return [Boolean] True if slowmode enabled
+    def slowmode?
+      rate_limit_per_user.to_i > 0
+    end
+
+    # Check if channel is synced with category permissions
+    # @return [Boolean, nil] True if synced
+    def synced?
+      @raw_data['parent_id'] && @raw_data['permission_overwrites']&.empty?
+    end
+
+    # Get mention string for the channel with type indicator
+    # @return [String] Channel mention with '#' prefix for text channels
+    def mention_with_prefix
+      text? ? "<##{id}>" : mention
+    end
+
+    # Get formatted name with type indicator
+    # @return [String] Formatted name
+    def display_name
+      case type
+      when 0, 5 then "# #{name}"
+      when 2, 13 then "🔊 #{name}"
+      when 4 then "📁 #{name}"
+      else name
+      end
+    end
+
+    # Check if the channel is considered active (has recent messages)
+    # @return [Boolean] True if active
+    def active?
+      return false unless last_message_id
+      last_message_at > Time.now - 86400 # Active within last 24 hours
+    end
+
+    # Get the age of the last message
+    # @return [Float, nil] Seconds since last message
+    def last_message_age
+      return nil unless last_message_at
+      Time.now - last_message_at
+    end
+
+    # Check if this is a news/announcement channel
+    # @return [Boolean] True if news channel
+    def news?
+      type == 5
+    end
+
+    # Get the default auto archive duration in days
+    # @return [Integer] Days
+    def auto_archive_days
+      (default_auto_archive_duration || 4320) / 1440 # Convert minutes to days, default 3 days
+    end
   end
 end

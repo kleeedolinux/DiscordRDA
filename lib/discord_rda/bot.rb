@@ -317,6 +317,34 @@ module DiscordRDA
       Message.new(data)
     end
 
+    # Get messages from a channel with pagination (simplified)
+    # @param channel_id [String, Snowflake] Channel ID
+    # @param limit [Integer] Max messages to fetch (1-100, default 50)
+    # @param before [String, Snowflake] Get messages before this ID
+    # @param after [String, Snowflake] Get messages after this ID
+    # @param around [String, Snowflake] Get messages around this ID
+    # @return [Array<Message>] Messages
+    def channel_messages(channel_id, limit: 50, before: nil, after: nil, around: nil)
+      params = { limit: limit }
+      params[:before] = before.to_s if before
+      params[:after] = after.to_s if after
+      params[:around] = around.to_s if around
+
+      data = @rest.get("/channels/#{channel_id}/messages", params: params)
+      data.map { |msg| Message.new(msg) }
+    end
+
+    # Get a single message from a channel
+    # @param channel_id [String, Snowflake] Channel ID
+    # @param message_id [String, Snowflake] Message ID
+    # @return [Message, nil] Message or nil
+    def channel_message(channel_id, message_id)
+      data = @rest.get("/channels/#{channel_id}/messages/#{message_id}")
+      Message.new(data)
+    rescue RestClient::NotFoundError
+      nil
+    end
+
     # Enable scalable REST client (queue-based rate limiting)
     # @param proxy [Hash] Optional proxy configuration
     # @return [void]
@@ -364,6 +392,314 @@ module DiscordRDA
     def analytics
       analytics_plugin = @plugins.get(:Analytics)
       analytics_plugin&.summary || {}
+    end
+
+    # === Message Reactions (Simplified) ===
+
+    # Add a reaction to a message
+    # @param channel_id [String, Snowflake] Channel ID
+    # @param message_id [String, Snowflake] Message ID
+    # @param emoji [String, Emoji] Emoji (unicode or name:id format)
+    # @return [void]
+    def add_reaction(channel_id, message_id, emoji)
+      emoji_str = emoji.respond_to?(:id) ? "#{emoji.name}:#{emoji.id}" : emoji.to_s
+      @rest.put("/channels/#{channel_id}/messages/#{message_id}/reactions/#{CGI.escape(emoji_str)}/@me")
+    end
+
+    # Remove a reaction from a message
+    # @param channel_id [String, Snowflake] Channel ID
+    # @param message_id [String, Snowflake] Message ID
+    # @param emoji [String, Emoji] Emoji
+    # @param user_id [String, Snowflake] User ID (default: @me)
+    # @return [void]
+    def remove_reaction(channel_id, message_id, emoji, user_id: '@me')
+      emoji_str = emoji.respond_to?(:id) ? "#{emoji.name}:#{emoji.id}" : emoji.to_s
+      @rest.delete("/channels/#{channel_id}/messages/#{message_id}/reactions/#{CGI.escape(emoji_str)}/#{user_id}")
+    end
+
+    # Get reactions for a message (simplified - no pagination)
+    # @param channel_id [String, Snowflake] Channel ID
+    # @param message_id [String, Snowflake] Message ID
+    # @param emoji [String, Emoji] Emoji filter
+    # @param limit [Integer] Max users to return (1-100, default 25)
+    # @return [Array<User>] Users who reacted
+    def get_reactions(channel_id, message_id, emoji, limit: 25)
+      emoji_str = emoji.respond_to?(:id) ? "#{emoji.name}:#{emoji.id}" : emoji.to_s
+      data = @rest.get("/channels/#{channel_id}/messages/#{message_id}/reactions/#{CGI.escape(emoji_str)}", params: { limit: limit })
+      data.map { |u| User.new(u) }
+    end
+
+    # Remove all reactions from a message
+    # @param channel_id [String, Snowflake] Channel ID
+    # @param message_id [String, Snowflake] Message ID
+    # @return [void]
+    def remove_all_reactions(channel_id, message_id)
+      @rest.delete("/channels/#{channel_id}/messages/#{message_id}/reactions")
+    end
+
+    # === Guild Members (Simplified) ===
+
+    # Get a guild member
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param user_id [String, Snowflake] User ID
+    # @return [Member, nil] Member or nil
+    def guild_member(guild_id, user_id)
+      data = @rest.get("/guilds/#{guild_id}/members/#{user_id}")
+      Member.new(data.merge('guild_id' => guild_id.to_s))
+    rescue RestClient::NotFoundError
+      nil
+    end
+
+    # List guild members (simplified - basic pagination)
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param limit [Integer] Max members (1-1000, default 100)
+    # @param after [String, Snowflake] Get members after this user ID
+    # @return [Array<Member>] Members
+    def guild_members(guild_id, limit: 100, after: nil)
+      params = { limit: limit }
+      params[:after] = after.to_s if after
+      data = @rest.get("/guilds/#{guild_id}/members", params: params)
+      data.map { |m| Member.new(m.merge('guild_id' => guild_id.to_s)) }
+    end
+
+    # Search guild members by query (simplified)
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param query [String] Search query (username/nickname prefix)
+    # @param limit [Integer] Max results (1-100, default 25)
+    # @return [Array<Member>] Matching members
+    def search_guild_members(guild_id, query, limit: 25)
+      params = { query: query, limit: limit }
+      data = @rest.get("/guilds/#{guild_id}/members/search", params: params)
+      data.map { |m| Member.new(m.merge('guild_id' => guild_id.to_s)) }
+    end
+
+    # Modify a guild member (simplified)
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param user_id [String, Snowflake] User ID
+    # @param options [Hash] Options to modify (nick, roles, mute, deaf, channel_id)
+    # @return [Member] Updated member
+    def modify_guild_member(guild_id, user_id, **options)
+      payload = options.slice(:nick, :roles, :mute, :deaf, :channel_id, :communication_disabled_until)
+      data = @rest.patch("/guilds/#{guild_id}/members/#{user_id}", body: payload)
+      Member.new(data.merge('guild_id' => guild_id.to_s))
+    end
+
+    # Add role to guild member
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param user_id [String, Snowflake] User ID
+    # @param role_id [String, Snowflake] Role ID
+    # @param reason [String] Audit log reason
+    # @return [void]
+    def add_guild_member_role(guild_id, user_id, role_id, reason: nil)
+      headers = reason ? { 'X-Audit-Log-Reason' => CGI.escape(reason) } : {}
+      @rest.put("/guilds/#{guild_id}/members/#{user_id}/roles/#{role_id}", headers: headers)
+    end
+
+    # Remove role from guild member
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param user_id [String, Snowflake] User ID
+    # @param role_id [String, Snowflake] Role ID
+    # @param reason [String] Audit log reason
+    # @return [void]
+    def remove_guild_member_role(guild_id, user_id, role_id, reason: nil)
+      headers = reason ? { 'X-Audit-Log-Reason' => CGI.escape(reason) } : {}
+      @rest.delete("/guilds/#{guild_id}/members/#{user_id}/roles/#{role_id}", headers: headers)
+    end
+
+    # Remove guild member (kick)
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param user_id [String, Snowflake] User ID
+    # @param reason [String] Audit log reason
+    # @return [void]
+    def remove_guild_member(guild_id, user_id, reason: nil)
+      headers = reason ? { 'X-Audit-Log-Reason' => CGI.escape(reason) } : {}
+      @rest.delete("/guilds/#{guild_id}/members/#{user_id}", headers: headers)
+    end
+
+    # === Guild Roles (Simplified) ===
+
+    # Get guild roles
+    # @param guild_id [String, Snowflake] Guild ID
+    # @return [Array<Role>] Roles
+    def guild_roles(guild_id)
+      data = @rest.get("/guilds/#{guild_id}/roles")
+      data.map { |r| Role.new(r.merge('guild_id' => guild_id.to_s)) }
+    end
+
+    # Create guild role (simplified)
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param name [String] Role name
+    # @param options [Hash] Optional settings (permissions, color, hoist, mentionable)
+    # @return [Role] Created role
+    def create_guild_role(guild_id, name:, **options)
+      payload = { name: name }.merge(options.slice(:permissions, :color, :hoist, :mentionable, :icon, :unicode_emoji))
+      data = @rest.post("/guilds/#{guild_id}/roles", body: payload)
+      Role.new(data.merge('guild_id' => guild_id.to_s))
+    end
+
+    # Modify guild role
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param role_id [String, Snowflake] Role ID
+    # @param options [Hash] Settings to modify
+    # @return [Role] Updated role
+    def modify_guild_role(guild_id, role_id, **options)
+      payload = options.slice(:name, :permissions, :color, :hoist, :mentionable, :icon, :unicode_emoji)
+      data = @rest.patch("/guilds/#{guild_id}/roles/#{role_id}", body: payload)
+      Role.new(data.merge('guild_id' => guild_id.to_s))
+    end
+
+    # Delete guild role
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param role_id [String, Snowflake] Role ID
+    # @param reason [String] Audit log reason
+    # @return [void]
+    def delete_guild_role(guild_id, role_id, reason: nil)
+      headers = reason ? { 'X-Audit-Log-Reason' => CGI.escape(reason) } : {}
+      @rest.delete("/guilds/#{guild_id}/roles/#{role_id}", headers: headers)
+    end
+
+    # === Guild Bans (Simplified) ===
+
+    # Get guild bans (simplified - no pagination)
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param limit [Integer] Max bans (1-1000, default 100)
+    # @return [Array<Hash>] Bans (user + reason data)
+    def guild_bans(guild_id, limit: 100)
+      data = @rest.get("/guilds/#{guild_id}/bans", params: { limit: limit })
+      data.map { |b| { user: User.new(b['user']), reason: b['reason'] } }
+    end
+
+    # Get a specific guild ban
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param user_id [String, Snowflake] User ID
+    # @return [Hash, nil] Ban data or nil
+    def guild_ban(guild_id, user_id)
+      data = @rest.get("/guilds/#{guild_id}/bans/#{user_id}")
+      { user: User.new(data['user']), reason: data['reason'] }
+    rescue RestClient::NotFoundError
+      nil
+    end
+
+    # Create guild ban
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param user_id [String, Snowflake] User ID
+    # @param delete_message_days [Integer] Days of messages to delete (0-7)
+    # @param reason [String] Audit log reason
+    # @return [void]
+    def create_guild_ban(guild_id, user_id, delete_message_days: nil, reason: nil)
+      payload = {}
+      payload[:delete_message_days] = delete_message_days if delete_message_days
+      headers = reason ? { 'X-Audit-Log-Reason' => CGI.escape(reason) } : {}
+      @rest.put("/guilds/#{guild_id}/bans/#{user_id}", body: payload, headers: headers)
+    end
+
+    # Remove guild ban (unban)
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param user_id [String, Snowflake] User ID
+    # @param reason [String] Audit log reason
+    # @return [void]
+    def remove_guild_ban(guild_id, user_id, reason: nil)
+      headers = reason ? { 'X-Audit-Log-Reason' => CGI.escape(reason) } : {}
+      @rest.delete("/guilds/#{guild_id}/bans/#{user_id}", headers: headers)
+    end
+
+    # === Webhooks (Simplified) ===
+
+    # Create a webhook
+    # @param channel_id [String, Snowflake] Channel ID
+    # @param name [String] Webhook name
+    # @param avatar [String] Base64-encoded avatar image (optional)
+    # @return [Hash] Webhook data
+    def create_webhook(channel_id, name:, avatar: nil)
+      payload = { name: name }
+      payload[:avatar] = avatar if avatar
+      @rest.post("/channels/#{channel_id}/webhooks", body: payload)
+    end
+
+    # Get channel webhooks
+    # @param channel_id [String, Snowflake] Channel ID
+    # @return [Array<Hash>] Webhooks
+    def channel_webhooks(channel_id)
+      @rest.get("/channels/#{channel_id}/webhooks")
+    end
+
+    # Get guild webhooks
+    # @param guild_id [String, Snowflake] Guild ID
+    # @return [Array<Hash>] Webhooks
+    def guild_webhooks(guild_id)
+      @rest.get("/guilds/#{guild_id}/webhooks")
+    end
+
+    # Execute webhook (simplified)
+    # @param webhook_id [String, Snowflake] Webhook ID
+    # @param token [String] Webhook token
+    # @param content [String] Message content
+    # @param options [Hash] Options (username, avatar_url, embeds, etc.)
+    # @return [void]
+    def execute_webhook(webhook_id, token, content = nil, **options)
+      payload = { content: content }.merge(options.slice(:username, :avatar_url, :embeds, :components, :allowed_mentions))
+      @rest.post("/webhooks/#{webhook_id}/#{token}", body: payload)
+    end
+
+    # Delete a webhook
+    # @param webhook_id [String, Snowflake] Webhook ID
+    # @param token [String] Webhook token (optional, for webhook-owned deletes)
+    # @return [void]
+    def delete_webhook(webhook_id, token: nil)
+      path = token ? "/webhooks/#{webhook_id}/#{token}" : "/webhooks/#{webhook_id}"
+      @rest.delete(path)
+    end
+
+    # === Channel Management (Simplified) ===
+
+    # Get guild channels
+    # @param guild_id [String, Snowflake] Guild ID
+    # @return [Array<Channel>] Channels
+    def guild_channels(guild_id)
+      data = @rest.get("/guilds/#{guild_id}/channels")
+      data.map { |c| Channel.new(c) }
+    end
+
+    # Create guild channel (simplified)
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param name [String] Channel name
+    # @param type [Integer] Channel type (0=text, 2=voice, 4=category, etc.)
+    # @param options [Hash] Optional settings
+    # @return [Channel] Created channel
+    def create_guild_channel(guild_id, name:, type: 0, **options)
+      payload = { name: name, type: type }.merge(options.slice(:topic, :bitrate, :user_limit, :parent_id, :nsfw, :permission_overwrites, :rate_limit_per_user))
+      data = @rest.post("/guilds/#{guild_id}/channels", body: payload)
+      Channel.new(data)
+    end
+
+    # Modify channel
+    # @param channel_id [String, Snowflake] Channel ID
+    # @param options [Hash] Settings to modify
+    # @return [Channel] Updated channel
+    def modify_channel(channel_id, **options)
+      payload = options.slice(:name, :type, :position, :topic, :nsfw, :rate_limit_per_user, :bitrate, :user_limit, :parent_id, :default_auto_archive_duration)
+      data = @rest.patch("/channels/#{channel_id}", body: payload)
+      Channel.new(data)
+    end
+
+    # Delete channel
+    # @param channel_id [String, Snowflake] Channel ID
+    # @param reason [String] Audit log reason
+    # @return [Channel] Deleted channel
+    def delete_channel(channel_id, reason: nil)
+      headers = reason ? { 'X-Audit-Log-Reason' => CGI.escape(reason) } : {}
+      data = @rest.delete("/channels/#{channel_id}", headers: headers)
+      Channel.new(data)
+    end
+
+    # Bulk delete messages
+    # @param channel_id [String, Snowflake] Channel ID
+    # @param message_ids [Array<String, Snowflake>] Message IDs to delete (2-100)
+    # @param reason [String] Audit log reason
+    # @return [void]
+    def bulk_delete_messages(channel_id, message_ids, reason: nil)
+      headers = reason ? { 'X-Audit-Log-Reason' => CGI.escape(reason) } : {}
+      @rest.post("/channels/#{channel_id}/messages/bulk-delete", body: { messages: message_ids.map(&:to_s) }, headers: headers)
     end
 
     def setup_interaction_handlers

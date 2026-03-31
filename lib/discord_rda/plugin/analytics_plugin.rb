@@ -175,12 +175,201 @@ module DiscordRDA
         },
         health: {
           status: health_status,
-          issues: detect_issues
-        }
+          issues: detect_issues,
+          checks: run_health_checks
+        },
+        system: system_metrics
       }
     end
 
+    # Run comprehensive health checks
+    # @return [Hash] Health check results
+    def run_health_checks
+      checks = {}
+
+      # Gateway health
+      checks[:gateway] = check_gateway_health
+
+      # REST API health
+      checks[:rest] = check_rest_health
+
+      # Cache health
+      checks[:cache] = check_cache_health
+
+      # Rate limiter health
+      checks[:rate_limiter] = check_rate_limiter_health
+
+      # Overall status
+      all_healthy = checks.values.all? { |c| c[:status] == :healthy }
+      checks[:overall] = {
+        status: all_healthy ? :healthy : :degraded,
+        timestamp: Time.now.utc.iso8601
+      }
+
+      checks
+    end
+
+    # Check gateway health
+    # @return [Hash] Gateway health status
+    def check_gateway_health
+      reconnects_5min = get_metric(:gateway, :reconnects, window: 300)
+      events_per_sec = get_metric(:gateway, :events_received, window: 1)
+
+      status = if reconnects_5min > 10
+        :critical
+      elsif reconnects_5min > 5
+        :warning
+      elsif events_per_sec == 0 && uptime_seconds > 60
+        :warning
+      else
+        :healthy
+      end
+
+      {
+        status: status,
+        reconnects_5min: reconnects_5min,
+        events_per_sec: events_per_sec,
+        connected: @bot&.shard_manager&.shards&.all?(&:connected?) || false
+      }
+    end
+
+    # Check REST API health
+    # @return [Hash] REST health status
+    def check_rest_health
+      rate_limited_1min = get_metric(:rest, :rate_limited, window: 60)
+      errors_1min = get_metric(:rest, :errors, window: 60)
+      avg_response = get_average(:rest, :avg_response_time, window: 60)
+
+      status = if errors_1min > 10
+        :critical
+      elsif rate_limited_1min > 5 || errors_1min > 3
+        :warning
+      elsif avg_response > 5000
+        :warning
+      else
+        :healthy
+      end
+
+      {
+        status: status,
+        rate_limited_1min: rate_limited_1min,
+        errors_1min: errors_1min,
+        avg_response_ms: avg_response.round(2)
+      }
+    end
+
+    # Check cache health
+    # @return [Hash] Cache health status
+    def check_cache_health
+      return { status: :unknown, reason: 'No cache configured' } unless @bot&.cache
+
+      stats = @bot.cache.stats
+      hit_rate = calculate_cache_hit_rate(window: 300)
+
+      status = if hit_rate < 10 && stats[:size].to_i > 100
+        :warning
+      else
+        :healthy
+      end
+
+      {
+        status: status,
+        hit_rate: hit_rate,
+        size: stats[:size],
+        memory_usage: stats[:memory_usage]
+      }
+    end
+
+    # Check rate limiter health
+    # @return [Hash] Rate limiter health status
+    def check_rate_limiter_health
+      return { status: :unknown } unless @bot&.rest.respond_to?(:rate_limiter)
+
+      rl_status = @bot.rest.rate_limiter.status
+
+      status = if rl_status[:global_limited]
+        :warning
+      else
+        :healthy
+      end
+
+      {
+        status: status,
+        global_limited: rl_status[:global_limited],
+        routes_tracked: rl_status[:routes_tracked]
+      }
+    end
+
+    # Get system metrics
+    # @return [Hash] System metrics
+    def system_metrics
+      {
+        uptime: uptime_seconds,
+        memory: memory_usage,
+        cpu: cpu_usage,
+        timestamp: Time.now.utc.iso8601
+      }
+    end
+
+    # Get memory usage
+    # @return [Hash] Memory usage info
+    def memory_usage
+      # Try to get memory info from GC
+      {
+        gc_stat: GC.stat,
+        total_objects: ObjectSpace.count_objects[:TOTAL]
+      }
+    rescue
+      { error: 'Unable to retrieve' }
+    end
+
+    # Get CPU usage (simplified)
+    # @return [Hash] CPU usage info
+    def cpu_usage
+      # This is a simplified implementation
+      { available: false }
+    end
+
+    # Generate health check report
+    # @return [String] Formatted health report
+    def health_report
+      checks = run_health_checks
+      lines = [
+        '🏥 DiscordRDA Health Report',
+        '=' * 40,
+        "Overall: #{emoji_for_status(checks[:overall][:status])} #{checks[:overall][:status].upcase}",
+        "Timestamp: #{checks[:overall][:timestamp]}",
+        '',
+        '📡 Gateway:',
+        "  Status: #{emoji_for_status(checks[:gateway][:status])} #{checks[:gateway][:status]}",
+        "  Connected: #{checks[:gateway][:connected]}",
+        "  Events/sec: #{checks[:gateway][:events_per_sec]}",
+        '',
+        '🌐 REST API:',
+        "  Status: #{emoji_for_status(checks[:rest][:status])} #{checks[:rest][:status]}",
+        "  Rate limited (1m): #{checks[:rest][:rate_limited_1min]}",
+        "  Errors (1m): #{checks[:rest][:errors_1min]}",
+        "  Avg response: #{checks[:rest][:avg_response_ms]}ms",
+        '',
+        '💾 Cache:',
+        "  Status: #{emoji_for_status(checks[:cache][:status])} #{checks[:cache][:status]}",
+        "  Hit rate: #{checks[:cache][:hit_rate]}%"
+      ]
+
+      lines.join("\n")
+    end
+
     private
+
+    def emoji_for_status(status)
+      case status
+      when :healthy then '✅'
+      when :warning then '⚠️'
+      when :critical then '❌'
+      when :degraded then '🔶'
+      else '❓'
+      end
+    end
 
     def initialize_metrics
       CATEGORIES.each do |category, metrics|

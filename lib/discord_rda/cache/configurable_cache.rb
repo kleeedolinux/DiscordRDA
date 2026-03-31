@@ -143,12 +143,141 @@ module DiscordRDA
 
     def filter_properties(entity, properties)
       return entity unless entity.respond_to?(:to_h)
+      return entity if properties.nil? || properties.empty?
 
       data = entity.to_h
-      filtered = data.slice(*properties.map(&:to_s))
+      # Support nested property selection with dot notation (e.g., "author.username")
+      filtered = {}
+      properties.each do |prop|
+        if prop.to_s.include?('.')
+          parts = prop.to_s.split('.')
+          current = data
+          current_filtered = filtered
+
+          parts.each_with_index do |part, idx|
+            if idx == parts.length - 1
+              current_filtered[part] = current[part] if current && current.key?(part)
+            else
+              current_filtered[part] ||= {}
+              current = current&.dig(part)
+              current_filtered = current_filtered[part]
+            end
+          end
+        else
+          filtered[prop.to_s] = data[prop.to_s] if data.key?(prop.to_s)
+        end
+      end
+
+      # Preserve ID if it's a filtered entity
+      filtered['id'] = data['id'] if data.key?('id') && !filtered.key?('id')
 
       # Create new entity with filtered data
       entity.class.new(filtered)
+    end
+
+    # Advanced property filtering with transforms
+    # @param entity [Entity] Entity to filter
+    # @param config [Hash] Filter config with :only, :except, :transform options
+    # @return [Entity] Filtered entity
+    def advanced_filter(entity, config = {})
+      return entity unless entity.respond_to?(:to_h)
+
+      data = entity.to_h
+
+      # Apply :only filter
+      if config[:only]
+        data = data.slice(*config[:only].map(&:to_s))
+      end
+
+      # Apply :except filter
+      if config[:except]
+        data = data.except(*config[:except].map(&:to_s))
+      end
+
+      # Apply transforms
+      if config[:transform]
+        config[:transform].each do |key, transform|
+          key_str = key.to_s
+          data[key_str] = transform.call(data[key_str]) if data.key?(key_str)
+        end
+      end
+
+      entity.class.new(data)
+    end
+
+    # Filter entities by custom predicate
+    # @param type [Symbol] Entity type
+    # @yield Block to filter entities
+    # @return [Array<Entity>] Filtered entities
+    def filter_by(type)
+      return [] unless block_given?
+      return [] unless should_cache?(type)
+
+      pattern = "#{type}:*"
+      all = @store.scan(pattern)
+      all.select { |_, entity| yield(entity) }.map { |_, entity| entity }
+    end
+
+    # Get filtered properties configuration for an entity type
+    # @param type [Symbol] Entity type
+    # @return [Array<Symbol>, nil] Properties to cache, or nil for all
+    def filter_for(type)
+      @cached_properties[type]
+    end
+
+    # Set filtered properties for an entity type
+    # @param type [Symbol] Entity type
+    # @param properties [Array<Symbol>] Properties to cache
+    # @return [void]
+    def set_filter(type, *properties)
+      @cached_properties[type] = properties.flatten
+    end
+
+    # Clear filter for an entity type
+    # @param type [Symbol] Entity type
+    # @return [void]
+    def clear_filter(type)
+      @cached_properties.delete(type)
+    end
+
+    # Batch cache entities with property filtering
+    # @param type [Symbol] Entity type
+    # @param entities [Array<Entity>] Entities to cache
+    # @param ttl [Integer] Time to live in seconds
+    # @return [void]
+    def cache_batch(type, entities, ttl: 300)
+      return unless should_cache?(type)
+
+      entities.each do |entity|
+        cache(type, entity.id, entity, ttl: ttl) if entity.respond_to?(:id)
+      end
+    end
+
+    # Get multiple entities by IDs
+    # @param type [Symbol] Entity type
+    # @param ids [Array<String, Snowflake>] Entity IDs
+    # @return [Array<Entity>] Found entities
+    def get_many(type, ids)
+      return [] unless should_cache?(type)
+
+      ids.map { |id| get(type, id) }.compact
+    end
+
+    # Invalidate multiple entities
+    # @param type [Symbol] Entity type
+    # @param ids [Array<String, Snowflake>] Entity IDs
+    # @return [void]
+    def invalidate_many(type, ids)
+      ids.each { |id| invalidate(type, id) }
+    end
+
+    # Invalidate by pattern
+    # @param pattern [String] Pattern to match (e.g., "guild:*:members")
+    # @return [Integer] Number of entries invalidated
+    def invalidate_pattern(pattern)
+      keys = @store.scan(pattern).map { |k, _| k }
+      keys.each { |k| @store.delete(k) }
+      keys.size
     end
   end
 end
