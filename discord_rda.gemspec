@@ -10,8 +10,8 @@ Gem::Specification.new do |spec|
   spec.summary       = 'Modern, scalable Ruby library for Discord bots'
   spec.description   = 'DiscordRDA (Ruby Development API) is a modern, scalable Ruby library for Discord bot development '
                        'featuring factory patterns, async runtime, and modular architecture.'
-  spec.homepage      = 'https://github.com/juliaklee/discord_rda'
-  spec.license       = 'Júlia Klee License'
+  spec.homepage      = 'https://github.com/kleeedolinux/discordrda'
+  spec.license       = 'MIT License'
 
   spec.required_ruby_version = '>= 3.0.0'
 
