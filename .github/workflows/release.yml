@@ -1,0 +1,63 @@
+name: Release Gem
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (leave empty to use version.rb)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  release:
+    name: Build and Release Gem
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.0'
+          bundler-cache: true
+
+      - name: Get version
+        id: get_version
+        run: |
+          VERSION=$(ruby -I lib -r discord_rda/version -e "puts DiscordRDA::VERSION")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Detected version: $VERSION"
+
+      - name: Build gem
+        run: |
+          gem build discord_rda.gemspec
+          ls -la *.gem
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.get_version.outputs.version }}
+          name: discord_rda v${{ steps.get_version.outputs.version }}
+          body: |
+            ## discord_rda v${{ steps.get_version.outputs.version }}
+
+            See [CHANGELOG.md](./CHANGELOG.md) for details.
+          draft: false
+          prerelease: false
+          files: |
+            *.gem
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to RubyGems.org
+        uses: rubygems/release-gem@v1
+        with:
+          await-release: false
