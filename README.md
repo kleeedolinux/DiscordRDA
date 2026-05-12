@@ -7,6 +7,8 @@
 
 DiscordRDA (Ruby Development API) is a high-performance Ruby library for building Discord bots with modern async patterns, comprehensive Slash Command support, Component V2 architecture, and enterprise-grade scalability features.
 
+The library now exposes a much broader Discord REST surface than the original quick-start examples show, including thread lifecycle helpers, webhook message management, invite creation, guild widget and onboarding endpoints, and current-user OAuth2 convenience methods.
+
 ## Features
 
 ### Core Capabilities
@@ -31,6 +33,12 @@ DiscordRDA (Ruby Development API) is a high-performance Ruby library for buildin
 - **Session Transfer**: Migrate guilds between shards seamlessly
 - **REST Proxy Support**: Horizontal scaling with proxy servers
 - **State Preservation**: Maintain sessions across reloads
+
+### Extended REST Coverage
+- **Threads**: Create, join, leave, archive, and manage thread members
+- **Webhooks**: Fetch, mutate, and edit webhook-owned messages
+- **Guild Admin**: Invites, prune, widget, vanity URL, welcome screen, onboarding
+- **Current User**: DM creation, guild listing, connections, role connections
 
 ## Installation
 
@@ -140,6 +148,26 @@ bot.context_menu(type: :user, name: 'High Five') do |interaction|
   user = interaction.target_user
   interaction.respond(content: "High-fived #{user.username}!")
 end
+```
+
+## REST Helpers
+
+```ruby
+# Create a thread from a message
+thread = bot.start_thread_from_message(
+  channel_id,
+  message_id,
+  name: 'incident-review',
+  auto_archive_duration: 1440
+)
+
+# Create a channel invite with the DSL builder
+invite = bot.create_channel_invite(channel_id) do |builder|
+  builder.max_age(3600).max_uses(5).temporary
+end
+
+# Edit a webhook message
+bot.edit_webhook_message(webhook_id, webhook_token, message_id, content: 'Updated from DiscordRDA')
 ```
 
 ## Components

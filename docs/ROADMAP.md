@@ -92,7 +92,7 @@ This document provides a complete status of DiscordRDA implementation.
 | **Get Channel Messages** | ✅ Implemented | Full pagination with before/after/around, iterator support |
 | **Get Channel Message** | ✅ Implemented | Single message fetch |
 | **Create Message** | ✅ Implemented | Full components support with MessageBuilder |
-| **Crosspost Message** | ❌ Not Implemented | |
+| **Crosspost Message** | ✅ Implemented | `Bot#crosspost_message` |
 | **Create Reaction** | ✅ Implemented | Full unicode and custom emoji support |
 | **Delete Reaction** | ✅ Implemented | Remove own or others' reactions |
 | **Get Reactions** | ✅ Implemented | Full reaction list with pagination support |
@@ -100,28 +100,28 @@ This document provides a complete status of DiscordRDA implementation.
 | **Edit Message** | ✅ Implemented | PATCH message |
 | **Delete Message** | ✅ Implemented | Delete request |
 | **Bulk Delete Messages** | ✅ Implemented | Bulk delete endpoint with reason support |
-| **Edit Channel Permissions** | ❌ Not Implemented | |
-| **Get Channel Invites** | ❌ Not Implemented | |
-| **Create Channel Invite** | ❌ Not Implemented | |
-| **Delete Channel Permission** | ❌ Not Implemented | |
-| **Follow News Channel** | ❌ Not Implemented | |
-| **Trigger Typing Indicator** | ❌ Not Implemented | |
-| **Get Pinned Messages** | ❌ Not Implemented | |
-| **Pin Message** | ❌ Not Implemented | |
-| **Unpin Message** | ❌ Not Implemented | |
+| **Edit Channel Permissions** | ✅ Implemented | `Bot#edit_channel_permissions` |
+| **Get Channel Invites** | ✅ Implemented | `Bot#channel_invites` |
+| **Create Channel Invite** | ✅ Implemented | `Bot#create_channel_invite` with `InviteBuilder` |
+| **Delete Channel Permission** | ✅ Implemented | `Bot#delete_channel_permission` |
+| **Follow News Channel** | ✅ Implemented | `Bot#follow_news_channel` |
+| **Trigger Typing Indicator** | ✅ Implemented | `Bot#trigger_typing` |
+| **Get Pinned Messages** | ✅ Implemented | `Bot#pinned_messages` |
+| **Pin Message** | ✅ Implemented | `Bot#pin_message` and `Message#pin` |
+| **Unpin Message** | ✅ Implemented | `Bot#unpin_message` and `Message#unpin` |
 | **Group DM Add Recipient** | ❌ Not Implemented | |
 | **Group DM Remove Recipient** | ❌ Not Implemented | |
-| **Start Thread from Message** | ❌ Not Implemented | |
-| **Start Thread without Message** | ❌ Not Implemented | |
-| **Join Thread** | ❌ Not Implemented | |
-| **Add Thread Member** | ❌ Not Implemented | |
-| **Leave Thread** | ❌ Not Implemented | |
-| **Remove Thread Member** | ❌ Not Implemented | |
-| **Get Thread Member** | ❌ Not Implemented | |
-| **List Thread Members** | ❌ Not Implemented | |
-| **List Public Archived Threads** | ❌ Not Implemented | |
-| **List Private Archived Threads** | ❌ Not Implemented | |
-| **List Joined Private Archived Threads** | ❌ Not Implemented | |
+| **Start Thread from Message** | ✅ Implemented | `Bot#start_thread_from_message` |
+| **Start Thread without Message** | ✅ Implemented | `Bot#start_thread` |
+| **Join Thread** | ✅ Implemented | `Bot#join_thread` |
+| **Add Thread Member** | ✅ Implemented | `Bot#add_thread_member` |
+| **Leave Thread** | ✅ Implemented | `Bot#leave_thread` |
+| **Remove Thread Member** | ✅ Implemented | `Bot#remove_thread_member` |
+| **Get Thread Member** | ✅ Implemented | `Bot#thread_member` |
+| **List Thread Members** | ✅ Implemented | `Bot#thread_members` |
+| **List Public Archived Threads** | ✅ Implemented | `Bot#archived_threads(scope: :public)` |
+| **List Private Archived Threads** | ✅ Implemented | `Bot#archived_threads(scope: :private)` |
+| **List Joined Private Archived Threads** | ✅ Implemented | `Bot#archived_threads(scope: :joined_private)` |
 
 ### REST API - Guilds
 
@@ -129,7 +129,7 @@ This document provides a complete status of DiscordRDA implementation.
 |---------|--------|-------|
 | **Create Guild** | ✅ Implemented | Full guild creation |
 | **Get Guild** | ✅ Implemented | Guild fetch with caching |
-| **Get Guild Preview** | ❌ Not Implemented | |
+| **Get Guild Preview** | ✅ Implemented | `Bot#guild_preview` and `Guild#fetch_preview` |
 | **Modify Guild** | ✅ Implemented | Full guild modification |
 | **Delete Guild** | ✅ Implemented | |
 | **Get Guild Channels** | ✅ Implemented | List guild channels with full data |
@@ -156,21 +156,21 @@ This document provides a complete status of DiscordRDA implementation.
 | **Modify Guild Role** | ✅ Implemented | Full role editing with all properties |
 | **Modify Guild Role Positions** | ❌ Not Implemented | |
 | **Delete Guild Role** | ✅ Implemented | Delete role with full audit log |
-| **Get Guild Prune Count** | ❌ Not Implemented | |
-| **Begin Guild Prune** | ❌ Not Implemented | |
-| **Get Guild Voice Regions** | ❌ Not Implemented | |
-| **Get Guild Invites** | ❌ Not Implemented | |
-| **Get Guild Integrations** | ❌ Not Implemented | |
-| **Delete Guild Integration** | ❌ Not Implemented | |
-| **Get Guild Widget Settings** | ❌ Not Implemented | |
-| **Modify Guild Widget** | ❌ Not Implemented | |
-| **Get Guild Widget** | ❌ Not Implemented | |
-| **Get Guild Vanity URL** | ❌ Not Implemented | |
-| **Get Guild Widget Image** | ❌ Not Implemented | |
-| **Get Guild Welcome Screen** | ❌ Not Implemented | |
-| **Modify Guild Welcome Screen** | ❌ Not Implemented | |
-| **Get Guild Onboarding** | ❌ Not Implemented | |
-| **Modify Guild Onboarding** | ❌ Not Implemented | |
+| **Get Guild Prune Count** | ✅ Implemented | `Bot#guild_prune_count` |
+| **Begin Guild Prune** | ✅ Implemented | `Bot#begin_guild_prune` |
+| **Get Guild Voice Regions** | ✅ Implemented | `Bot#guild_voice_regions` and `Guild#fetch_voice_regions` |
+| **Get Guild Invites** | ✅ Implemented | `Bot#guild_invites` and `Guild#fetch_invites` |
+| **Get Guild Integrations** | ✅ Implemented | `Bot#guild_integrations` and `Guild#fetch_integrations` |
+| **Delete Guild Integration** | ✅ Implemented | `Bot#delete_guild_integration` |
+| **Get Guild Widget Settings** | ✅ Implemented | `Bot#guild_widget_settings` and `Guild#fetch_widget_settings` |
+| **Modify Guild Widget** | ✅ Implemented | `Bot#modify_guild_widget` |
+| **Get Guild Widget** | ✅ Implemented | `Bot#guild_widget` |
+| **Get Guild Vanity URL** | ✅ Implemented | `Bot#guild_vanity_url` |
+| **Get Guild Widget Image** | ✅ Implemented | `Bot#guild_widget_image` |
+| **Get Guild Welcome Screen** | ✅ Implemented | `Bot#guild_welcome_screen` and `Guild#fetch_welcome_screen` |
+| **Modify Guild Welcome Screen** | ✅ Implemented | `Bot#modify_guild_welcome_screen` |
+| **Get Guild Onboarding** | ✅ Implemented | `Bot#guild_onboarding` and `Guild#fetch_onboarding` |
+| **Modify Guild Onboarding** | ✅ Implemented | `Bot#modify_guild_onboarding` |
 
 ### REST API - Interactions (Slash Commands)
 
@@ -207,14 +207,14 @@ This document provides a complete status of DiscordRDA implementation.
 |---------|--------|-------|
 | **Get Current User** | ✅ Implemented | Bot user fetch |
 | **Get User** | ✅ Implemented | Full fetch with guilds, DMs, connections support |
-| **Modify Current User** | ❌ Not Implemented | |
-| **Get Current User Guilds** | ❌ Not Implemented | |
-| **Get Current User Guild Member** | ❌ Not Implemented | |
-| **Leave Guild** | ❌ Not Implemented | |
-| **Create DM** | ❌ Not Implemented | |
-| **Get User Connections** | ❌ Not Implemented | |
-| **Get User Application Role Connection** | ❌ Not Implemented | |
-| **Update User Application Role Connection** | ❌ Not Implemented | |
+| **Modify Current User** | ✅ Implemented | `Bot#modify_current_user` and `User.modify_current_user` |
+| **Get Current User Guilds** | ✅ Implemented | `Bot#current_user_guilds` and `User.get_current_user_guilds` |
+| **Get Current User Guild Member** | ✅ Implemented | `Bot#current_user_guild_member` and `User.get_current_user_guild_member` |
+| **Leave Guild** | ✅ Implemented | `Bot#leave_guild` and `User.leave_guild` |
+| **Create DM** | ✅ Implemented | `Bot#create_dm` and `User#create_dm_channel` |
+| **Get User Connections** | ✅ Implemented | `Bot#current_user_connections` and `User.get_connections` |
+| **Get User Application Role Connection** | ✅ Implemented | `Bot#application_role_connection` and `User.get_application_role_connection` |
+| **Update User Application Role Connection** | ✅ Implemented | `Bot#update_application_role_connection` and `User.update_application_role_connection` |
 
 ### REST API - Webhooks
 
@@ -223,25 +223,25 @@ This document provides a complete status of DiscordRDA implementation.
 | **Create Webhook** | ✅ Implemented | Create webhook in channel |
 | **Get Channel Webhooks** | ✅ Implemented | List channel webhooks |
 | **Get Guild Webhooks** | ✅ Implemented | List guild webhooks |
-| **Get Webhook** | ❌ Not Implemented | Fetch single webhook |
-| **Get Webhook with Token** | ❌ Not Implemented | |
-| **Modify Webhook** | ❌ Not Implemented | |
-| **Modify Webhook with Token** | ❌ Not Implemented | |
+| **Get Webhook** | ✅ Implemented | `Bot#webhook` |
+| **Get Webhook with Token** | ✅ Implemented | `Bot#webhook_with_token` |
+| **Modify Webhook** | ✅ Implemented | `Bot#modify_webhook` |
+| **Modify Webhook with Token** | ✅ Implemented | `Bot#modify_webhook_with_token` |
 | **Delete Webhook** | ✅ Implemented | Delete webhook |
-| **Delete Webhook with Token** | ❌ Not Implemented | |
+| **Delete Webhook with Token** | ✅ Implemented | `Bot#delete_webhook(token: ...)` |
 | **Execute Webhook** | ✅ Implemented | Send message via webhook with components |
-| **Execute Slack-Compatible Webhook** | ❌ Not Implemented | |
-| **Execute GitHub-Compatible Webhook** | ❌ Not Implemented | |
-| **Get Webhook Message** | ❌ Not Implemented | |
-| **Edit Webhook Message** | ❌ Not Implemented | |
-| **Delete Webhook Message** | ❌ Not Implemented | |
+| **Execute Slack-Compatible Webhook** | ✅ Implemented | `Bot#execute_slack_webhook` |
+| **Execute GitHub-Compatible Webhook** | ✅ Implemented | `Bot#execute_github_webhook` |
+| **Get Webhook Message** | ✅ Implemented | `Bot#webhook_message` |
+| **Edit Webhook Message** | ✅ Implemented | `Bot#edit_webhook_message` |
+| **Delete Webhook Message** | ✅ Implemented | `Bot#delete_webhook_message` |
 
 ### REST API - OAuth2
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| **Get Current Bot Application Info** | ❌ Not Implemented | |
-| **Get Current Authorization Info** | ❌ Not Implemented | |
+| **Get Current Bot Application Info** | ✅ Implemented | `Bot#application_info` |
+| **Get Current Authorization Info** | ✅ Implemented | `Bot#authorization_info` |
 
 ### REST API - Other
 
