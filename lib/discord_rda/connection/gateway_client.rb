@@ -52,6 +52,9 @@ module DiscordRDA
     # @return [String] Session ID for resuming
     attr_reader :session_id
 
+    # @return [String, nil] Resume gateway URL
+    attr_reader :resume_gateway_url
+
     # @return [Boolean] Whether connected
     attr_reader :connected
 
@@ -205,6 +208,13 @@ module DiscordRDA
       }
 
       send_payload(payload)
+    end
+
+    def restore_session_state(session_id:, sequence:, resume_gateway_url: nil)
+      @session_id = session_id
+      @sequence = sequence.to_i
+      @resume_gateway_url = resume_gateway_url if resume_gateway_url
+      @logger&.info('Restored gateway session state', shard: @shard_id, session: @session_id, seq: @sequence)
     end
 
     private

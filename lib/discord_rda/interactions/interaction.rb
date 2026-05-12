@@ -54,6 +54,7 @@ module DiscordRDA
     # Class-level API client
     class << self
       attr_accessor :api
+      attr_accessor :supervisor
     end
 
     # Get interaction type as symbol
@@ -437,6 +438,17 @@ module DiscordRDA
       raise 'API client not configured' unless self.class.api
 
       self.class.api.delete("/webhooks/#{application_id}/#{token}/messages/#{message_id}")
+    end
+
+    def run_isolated(ruby_code:, timeout_seconds: 15, memory_limit_mb: nil, env: {})
+      raise 'Execution supervisor not configured' unless self.class.supervisor
+
+      self.class.supervisor.run_isolated(
+        ruby_code: ruby_code,
+        timeout_seconds: timeout_seconds,
+        memory_limit_mb: memory_limit_mb,
+        env: env
+      )
     end
 
     # Show premium required response

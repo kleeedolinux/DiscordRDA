@@ -116,6 +116,10 @@ module DiscordRDA
       @handler
     end
 
+    def execution_policy
+      @execution_policy ||= {}
+    end
+
     # Set the handler block
     # @param block [Proc] Handler block
     def handler=(block)
@@ -215,6 +219,7 @@ module DiscordRDA
       @dm_permission = true
       @nsfw = false
       @handler = nil
+      @execution_policy = {}
     end
 
     # Set command type
@@ -404,6 +409,27 @@ module DiscordRDA
       self
     end
 
+    def timeout(seconds)
+      @execution_policy[:timeout_seconds] = seconds.to_f
+      self
+    end
+
+    def max_concurrency(value)
+      @execution_policy[:max_concurrency] = value.to_i
+      self
+    end
+
+    def circuit_breaker(failures:, cooldown:)
+      @execution_policy[:failure_threshold] = failures.to_i
+      @execution_policy[:cooldown_seconds] = cooldown.to_f
+      self
+    end
+
+    def execution_policy(**policy)
+      @execution_policy.merge!(policy)
+      self
+    end
+
     # Convert to hash for API
     # @return [Hash] Command hash
     def to_h
@@ -425,6 +451,7 @@ module DiscordRDA
     def build
       cmd = ApplicationCommand.new(to_h)
       cmd.handler = @handler
+      cmd.instance_variable_set(:@execution_policy, @execution_policy.dup)
       cmd
     end
 

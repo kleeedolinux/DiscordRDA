@@ -30,10 +30,11 @@ module DiscordRDA
     # @param config [Configuration] Bot configuration
     # @param event_bus [EventBus] Event bus instance
     # @param logger [Logger] Logger instance
-    def initialize(config, event_bus, logger)
+    def initialize(config, event_bus, logger, gateway_state: {})
       @config = config
       @event_bus = event_bus
       @logger = logger
+      @gateway_state = gateway_state || {}
       @shard_count = nil
       @shards = []
       @total_guilds = nil
@@ -190,6 +191,14 @@ module DiscordRDA
         shard_id: shard_id,
         shard_count: shard_count
       )
+
+      if (state = @gateway_state[shard_id] || @gateway_state[shard_id.to_s])
+        gateway.restore_session_state(
+          session_id: state['session_id'] || state[:session_id],
+          sequence: state['sequence'] || state[:sequence],
+          resume_gateway_url: state['resume_gateway_url'] || state[:resume_gateway_url]
+        )
+      end
 
       @mutex.synchronize { @shards << gateway }
 

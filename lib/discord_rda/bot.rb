@@ -46,6 +46,18 @@ module DiscordRDA
     # @return [ErrorTracker] Error tracking helper
     attr_reader :error_tracker
 
+    # @return [RestartManager] Instant restart helper
+    attr_reader :restart_manager
+
+    # @return [ExecutionSupervisor] Fault-tolerant execution supervisor
+    attr_reader :supervisor
+
+    # @return [Hash] Boot-time restart state
+    attr_reader :restart_state
+
+    # @return [ActiveRecordSystem, nil] ActiveRecord integration helper
+    attr_reader :active_record
+
     # @return [Boolean] Whether bot is running
     attr_reader :running
 
@@ -64,11 +76,14 @@ module DiscordRDA
         rotate_age: @config.log_rotate_age,
         rotate_size: @config.log_rotate_size
       )
+      @restart_manager = RestartManager.new(logger: @logger)
+      @restart_state = @restart_manager.consume_boot_state
       @tracer = Tracer.new(enabled: @config.trace_enabled, logger: @logger)
       @error_tracker = ErrorTracker.new(enabled: @config.error_tracking, logger: @logger)
+      @supervisor = ExecutionSupervisor.new(logger: @logger)
       @event_bus = EventBus.new(logger: @logger)
       @cache = build_cache
-      @shard_manager = ShardManager.new(@config, @event_bus, @logger)
+      @shard_manager = ShardManager.new(@config, @event_bus, @logger, gateway_state: restart_gateway_state)
       @rest = RestClient.new(@config, @logger)
 
       # Configure entity API clients
@@ -82,11 +97,23 @@ module DiscordRDA
       @reshard_manager = ReshardManager.new(self, @shard_manager, @logger)
       @hot_reload_manager = HotReloadManager.new(self, @logger)
       @plugins = PluginRegistry.new(logger: @logger)
+      @restart_manager.attach(self)
       @slash_commands = {}
       @running = false
       @commands = {}
+      @active_record = nil
 
       setup_event_handlers
+    end
+
+    def restart!(command: nil, env: {})
+      @restart_manager.restart!(command: command, env: env)
+    end
+
+    def enable_active_record(database_url: nil, **options)
+      @active_record = ActiveRecordSystem.new(logger: @logger)
+      @active_record.connect(database_url: database_url, **options)
+      @active_record
     end
 
     # Register a slash command (global or guild-specific)
@@ -1782,9 +1809,16 @@ module DiscordRDA
     def configure_entity_apis(client)
       Message.api = client
       Interaction.api = client
+      Interaction.supervisor = @supervisor
       User.api = client
       Guild.api = client
       Channel.api = client
+    end
+
+    def restart_gateway_state
+      Array(@restart_state['shards']).each_with_object({}) do |shard, states|
+        states[shard['shard_id']] = shard
+      end
     end
 
     def install_signal_handlers
@@ -1830,11 +1864,25 @@ module DiscordRDA
       if cmd && cmd.handler
         @logger.debug('Executing slash command', name: cmd_name, user: interaction.user&.id)
         begin
-          cmd.handler.call(interaction)
+          @supervisor.execute(
+            "command:#{key}",
+            policy: cmd.execution_policy
+          ) do
+            cmd.handler.call(interaction)
+          end
+        rescue ExecutionSupervisor::TimeoutError => e
+          @logger.error('Slash command timeout', command: cmd_name, error: e)
+          interaction.respond(content: 'This command timed out and was stopped.', ephemeral: true) rescue nil
+        rescue ExecutionSupervisor::ConcurrencyLimitError => e
+          @logger.warn('Slash command concurrency limit', command: cmd_name, error: e)
+          interaction.respond(content: 'This command is busy right now. Try again in a moment.', ephemeral: true) rescue nil
+        rescue ExecutionSupervisor::CircuitOpenError => e
+          @logger.warn('Slash command circuit open', command: cmd_name, error: e)
+          interaction.respond(content: 'This command was temporarily disabled after repeated failures.', ephemeral: true) rescue nil
         rescue => e
           @logger.error('Slash command error', command: cmd_name, error: e)
-          # Send error response
           interaction.respond(content: "An error occurred while executing this command.", ephemeral: true) rescue nil
+          @error_tracker.capture(e, command: cmd_name, user_id: interaction.user&.id)
         end
       else
         @logger.warn('Unknown slash command', name: cmd_name)
