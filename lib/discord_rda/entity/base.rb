@@ -61,7 +61,6 @@ module DiscordRDA
 
       @id = normalized_data['id'] ? Snowflake.new(normalized_data['id']) : nil
       @raw_data = normalized_data.freeze
-      freeze
     end
 
     # Get raw API data

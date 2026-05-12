@@ -292,6 +292,209 @@ module DiscordRDA
     end
   end
 
+  class Integration < Entity
+    attribute :name, type: :string
+    attribute :type, type: :string
+    attribute :enabled, type: :boolean, default: false
+    attribute :syncing, type: :boolean, default: false
+    attribute :role_id, type: :snowflake
+    attribute :enable_emoticons, type: :boolean, default: false
+    attribute :expire_behavior, type: :integer
+    attribute :expire_grace_period, type: :integer
+    attribute :subscriber_count, type: :integer
+    attribute :revoked, type: :boolean, default: false
+    attribute :scopes, type: :array, default: []
+    attribute :guild_id, type: :snowflake
+    attribute :application_id, type: :snowflake
+
+    def user
+      @raw_data['user'] ? User.new(@raw_data['user']) : nil
+    end
+
+    def account
+      @raw_data['account'] || {}
+    end
+
+    def synced_at
+      @raw_data['synced_at'] ? Time.parse(@raw_data['synced_at']) : nil
+    end
+
+    def application
+      @raw_data['application'] ? Application.new(@raw_data['application']) : nil
+    end
+  end
+
+  class Presence < Entity
+    attribute :guild_id, type: :snowflake
+    attribute :status, type: :string
+
+    def user
+      @raw_data['user'] ? User.new(@raw_data['user']) : nil
+    end
+
+    def user_id
+      user&.id
+    end
+
+    def activities
+      @raw_data['activities'] || []
+    end
+
+    def client_status
+      @raw_data['client_status'] || {}
+    end
+
+    def desktop_status
+      client_status['desktop']
+    end
+
+    def mobile_status
+      client_status['mobile']
+    end
+
+    def web_status
+      client_status['web']
+    end
+
+    def online?
+      status == 'online'
+    end
+
+    def idle?
+      status == 'idle'
+    end
+
+    def dnd?
+      status == 'dnd'
+    end
+
+    def offline?
+      status == 'offline'
+    end
+  end
+
+  class VoiceState < Entity
+    attribute :guild_id, type: :snowflake
+    attribute :channel_id, type: :snowflake
+    attribute :user_id, type: :snowflake
+    attribute :session_id, type: :string
+    attribute :deaf, type: :boolean, default: false
+    attribute :mute, type: :boolean, default: false
+    attribute :self_deaf, type: :boolean, default: false
+    attribute :self_mute, type: :boolean, default: false
+    attribute :self_stream, type: :boolean, default: false
+    attribute :self_video, type: :boolean, default: false
+    attribute :suppress, type: :boolean, default: false
+
+    def member
+      return nil unless @raw_data['member']
+
+      Member.new(@raw_data['member'].merge('guild_id' => @raw_data['guild_id']))
+    end
+
+    def request_to_speak_timestamp
+      @raw_data['request_to_speak_timestamp'] ? Time.parse(@raw_data['request_to_speak_timestamp']) : nil
+    end
+
+    def connected?
+      !channel_id.nil?
+    end
+  end
+
+  class VoiceServer < Entity
+    attribute :token, type: :string
+    attribute :guild_id, type: :snowflake
+    attribute :endpoint, type: :string
+  end
+
+  class Webhook < Entity
+    TYPES = {
+      incoming: 1,
+      channel_follower: 2,
+      application: 3
+    }.freeze
+
+    attribute :type, type: :integer
+    attribute :guild_id, type: :snowflake
+    attribute :channel_id, type: :snowflake
+    attribute :name, type: :string
+    attribute :avatar, type: :string
+    attribute :token, type: :string
+    attribute :application_id, type: :snowflake
+    attribute :url, type: :string
+
+    def user
+      @raw_data['user'] ? User.new(@raw_data['user']) : nil
+    end
+
+    def source_guild
+      @raw_data['source_guild'] ? Guild.new(@raw_data['source_guild']) : nil
+    end
+
+    def source_channel
+      @raw_data['source_channel'] ? Channel.new(@raw_data['source_channel']) : nil
+    end
+
+    def incoming?
+      type == 1
+    end
+
+    def channel_follower?
+      type == 2
+    end
+
+    def application?
+      type == 3
+    end
+  end
+
+  class StageInstance < Entity
+    attribute :guild_id, type: :snowflake
+    attribute :channel_id, type: :snowflake
+    attribute :topic, type: :string
+    attribute :privacy_level, type: :integer
+    attribute :discoverable_disabled, type: :boolean, default: false
+    attribute :guild_scheduled_event_id, type: :snowflake
+
+    def guild_only?
+      privacy_level == 2
+    end
+  end
+
+  class Entitlement < Entity
+    attribute :sku_id, type: :snowflake
+    attribute :application_id, type: :snowflake
+    attribute :user_id, type: :snowflake
+    attribute :guild_id, type: :snowflake
+    attribute :type, type: :integer
+    attribute :deleted, type: :boolean, default: false
+    attribute :consumed, type: :boolean, default: false
+
+    def starts_at
+      @raw_data['starts_at'] ? Time.parse(@raw_data['starts_at']) : nil
+    end
+
+    def ends_at
+      @raw_data['ends_at'] ? Time.parse(@raw_data['ends_at']) : nil
+    end
+
+    def active?(at: Time.now.utc)
+      return false if deleted
+      return false if starts_at && at < starts_at
+      return false if ends_at && at > ends_at
+
+      true
+    end
+
+    def owner_id
+      user_id || guild_id
+    end
+
+    def owner_type
+      user_id ? :user : :guild
+    end
+  end
+
   class Application < Entity
     attribute :name, type: :string
     attribute :icon, type: :string

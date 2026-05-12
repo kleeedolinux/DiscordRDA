@@ -23,10 +23,9 @@ module DiscordRDA
     # @param shard_id [Integer] Shard ID
     def initialize(type, data, shard_id: 0)
       @type = type.to_s
-      @data = data.freeze
+      @data = data.each_with_object({}) { |(key, value), hash| hash[key.to_s] = value }.freeze
       @shard_id = shard_id
       @timestamp = Time.now.utc.freeze
-      freeze
     end
 
     # Get creation time from data if available
@@ -152,7 +151,7 @@ module DiscordRDA
       'ENTITLEMENT_CREATE' => 'EntitlementCreateEvent',
       'ENTITLEMENT_UPDATE' => 'EntitlementUpdateEvent',
       'ENTITLEMENT_DELETE' => 'EntitlementDeleteEvent'
-    }.freeze
+    }
 
     class << self
       # Create an event from Gateway data
@@ -161,10 +160,10 @@ module DiscordRDA
       # @param shard_id [Integer] Shard ID
       # @return [Event] Event instance
       def create(event_type, data, shard_id = 0)
-        class_name = EVENT_CLASSES[event_type]
+        class_name = event_classes[event_type.to_s]
 
-        if class_name && Event.const_defined?(class_name)
-          Event.const_get(class_name).new(data, shard_id: shard_id)
+        if class_name && DiscordRDA.const_defined?(class_name, false)
+          DiscordRDA.const_get(class_name, false).new(data, shard_id: shard_id)
         else
           Event.new(event_type, data, shard_id: shard_id)
         end
@@ -175,7 +174,13 @@ module DiscordRDA
       # @param klass [Class] Event class
       # @return [void]
       def register(event_type, klass)
-        EVENT_CLASSES[event_type] = klass.name
+        event_classes[event_type.to_s] = klass.name.split('::').last
+      end
+
+      private
+
+      def event_classes
+        @event_classes ||= EVENT_CLASSES.dup
       end
     end
   end
@@ -981,6 +986,252 @@ module DiscordRDA
 
     def removed_member_ids
       @data['removed_member_ids'] || []
+    end
+  end
+
+  class GuildIntegrationsUpdateEvent < Event
+    def initialize(data, shard_id:)
+      super('GUILD_INTEGRATIONS_UPDATE', data, shard_id: shard_id)
+    end
+
+    def guild_id
+      @data['guild_id'] ? Snowflake.new(@data['guild_id']) : nil
+    end
+  end
+
+  class PresenceUpdateEvent < Event
+    def initialize(data, shard_id:)
+      super('PRESENCE_UPDATE', data, shard_id: shard_id)
+    end
+
+    def presence
+      Presence.new(@data)
+    end
+
+    def user
+      presence.user
+    end
+
+    def guild_id
+      presence.guild_id
+    end
+
+    def status
+      presence.status
+    end
+
+    def activities
+      presence.activities
+    end
+
+    def client_status
+      presence.client_status
+    end
+  end
+
+  class TypingStartEvent < Event
+    def initialize(data, shard_id:)
+      super('TYPING_START', data, shard_id: shard_id)
+    end
+
+    def channel_id
+      @data['channel_id'] ? Snowflake.new(@data['channel_id']) : nil
+    end
+
+    def guild_id
+      @data['guild_id'] ? Snowflake.new(@data['guild_id']) : nil
+    end
+
+    def user_id
+      @data['user_id'] ? Snowflake.new(@data['user_id']) : nil
+    end
+
+    def member
+      return nil unless @data['member']
+
+      Member.new(@data['member'].merge('guild_id' => @data['guild_id']))
+    end
+
+    def started_at
+      Time.at(@data['timestamp'].to_i).utc if @data['timestamp']
+    end
+
+    def guild?
+      !guild_id.nil?
+    end
+  end
+
+  class UserUpdateEvent < Event
+    def initialize(data, shard_id:)
+      super('USER_UPDATE', data, shard_id: shard_id)
+    end
+
+    def user
+      User.new(@data)
+    end
+  end
+
+  class VoiceStateUpdateEvent < Event
+    def initialize(data, shard_id:)
+      super('VOICE_STATE_UPDATE', data, shard_id: shard_id)
+    end
+
+    def voice_state
+      VoiceState.new(@data)
+    end
+
+    def guild_id
+      voice_state.guild_id
+    end
+
+    def channel_id
+      voice_state.channel_id
+    end
+
+    def user_id
+      voice_state.user_id
+    end
+
+    def member
+      voice_state.member
+    end
+
+    def session_id
+      voice_state.session_id
+    end
+  end
+
+  class VoiceServerUpdateEvent < Event
+    def initialize(data, shard_id:)
+      super('VOICE_SERVER_UPDATE', data, shard_id: shard_id)
+    end
+
+    def server
+      VoiceServer.new(@data)
+    end
+
+    def guild_id
+      server.guild_id
+    end
+
+    def token
+      server.token
+    end
+
+    def endpoint
+      server.endpoint
+    end
+  end
+
+  class WebhooksUpdateEvent < Event
+    def initialize(data, shard_id:)
+      super('WEBHOOKS_UPDATE', data, shard_id: shard_id)
+    end
+
+    def guild_id
+      @data['guild_id'] ? Snowflake.new(@data['guild_id']) : nil
+    end
+
+    def channel_id
+      @data['channel_id'] ? Snowflake.new(@data['channel_id']) : nil
+    end
+  end
+
+  class StageInstanceCreateEvent < Event
+    def initialize(data, shard_id:)
+      super('STAGE_INSTANCE_CREATE', data, shard_id: shard_id)
+    end
+
+    def stage_instance
+      StageInstance.new(@data)
+    end
+
+    def guild_id
+      stage_instance.guild_id
+    end
+
+    def channel_id
+      stage_instance.channel_id
+    end
+  end
+
+  class StageInstanceUpdateEvent < Event
+    def initialize(data, shard_id:)
+      super('STAGE_INSTANCE_UPDATE', data, shard_id: shard_id)
+    end
+
+    def stage_instance
+      StageInstance.new(@data)
+    end
+
+    def guild_id
+      stage_instance.guild_id
+    end
+
+    def channel_id
+      stage_instance.channel_id
+    end
+  end
+
+  class StageInstanceDeleteEvent < Event
+    def initialize(data, shard_id:)
+      super('STAGE_INSTANCE_DELETE', data, shard_id: shard_id)
+    end
+
+    def stage_instance
+      StageInstance.new(@data)
+    end
+
+    def guild_id
+      stage_instance.guild_id
+    end
+
+    def channel_id
+      stage_instance.channel_id
+    end
+  end
+
+  class GuildAuditLogEntryCreateEvent < Event
+    def initialize(data, shard_id:)
+      super('GUILD_AUDIT_LOG_ENTRY_CREATE', data, shard_id: shard_id)
+    end
+
+    def entry
+      AuditLogEntry.new(@data)
+    end
+
+    def guild_id
+      @data['guild_id'] ? Snowflake.new(@data['guild_id']) : nil
+    end
+  end
+
+  class EntitlementCreateEvent < Event
+    def initialize(data, shard_id:)
+      super('ENTITLEMENT_CREATE', data, shard_id: shard_id)
+    end
+
+    def entitlement
+      Entitlement.new(@data)
+    end
+  end
+
+  class EntitlementUpdateEvent < Event
+    def initialize(data, shard_id:)
+      super('ENTITLEMENT_UPDATE', data, shard_id: shard_id)
+    end
+
+    def entitlement
+      Entitlement.new(@data)
+    end
+  end
+
+  class EntitlementDeleteEvent < Event
+    def initialize(data, shard_id:)
+      super('ENTITLEMENT_DELETE', data, shard_id: shard_id)
+    end
+
+    def entitlement
+      Entitlement.new(@data)
     end
   end
 end

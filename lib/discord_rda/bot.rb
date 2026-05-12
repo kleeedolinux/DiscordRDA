@@ -380,7 +380,7 @@ module DiscordRDA
       Message.new(data)
     end
 
-    # Get messages from a channel with pagination (simplified)
+    # Get messages from a channel with pagination
     # @param channel_id [String, Snowflake] Channel ID
     # @param limit [Integer] Max messages to fetch (1-100, default 50)
     # @param before [String, Snowflake] Get messages before this ID
@@ -678,7 +678,7 @@ module DiscordRDA
       analytics_plugin&.summary || {}
     end
 
-    # === Message Reactions (Simplified) ===
+    # === Message Reactions ===
 
     # Add a reaction to a message
     # @param channel_id [String, Snowflake] Channel ID
@@ -701,15 +701,18 @@ module DiscordRDA
       @rest.delete("/channels/#{channel_id}/messages/#{message_id}/reactions/#{CGI.escape(emoji_str)}/#{user_id}")
     end
 
-    # Get reactions for a message (simplified - no pagination)
+    # Get reactions for a message
     # @param channel_id [String, Snowflake] Channel ID
     # @param message_id [String, Snowflake] Message ID
     # @param emoji [String, Emoji] Emoji filter
     # @param limit [Integer] Max users to return (1-100, default 25)
+    # @param after [String, Snowflake, nil] Cursor for pagination
     # @return [Array<User>] Users who reacted
-    def get_reactions(channel_id, message_id, emoji, limit: 25)
+    def get_reactions(channel_id, message_id, emoji, limit: 25, after: nil)
       emoji_str = emoji.respond_to?(:id) ? "#{emoji.name}:#{emoji.id}" : emoji.to_s
-      data = @rest.get("/channels/#{channel_id}/messages/#{message_id}/reactions/#{CGI.escape(emoji_str)}", params: { limit: limit })
+      params = { limit: limit }
+      params[:after] = after.to_s if after
+      data = @rest.get("/channels/#{channel_id}/messages/#{message_id}/reactions/#{CGI.escape(emoji_str)}", params: params)
       data.map { |u| User.new(u) }
     end
 
@@ -721,7 +724,7 @@ module DiscordRDA
       @rest.delete("/channels/#{channel_id}/messages/#{message_id}/reactions")
     end
 
-    # === Guild Members (Simplified) ===
+    # === Guild Members ===
 
     # Get a guild member
     # @param guild_id [String, Snowflake] Guild ID
@@ -734,7 +737,7 @@ module DiscordRDA
       nil
     end
 
-    # List guild members (simplified - basic pagination)
+    # List guild members with pagination
     # @param guild_id [String, Snowflake] Guild ID
     # @param limit [Integer] Max members (1-1000, default 100)
     # @param after [String, Snowflake] Get members after this user ID
@@ -746,7 +749,7 @@ module DiscordRDA
       data.map { |m| Member.new(m.merge('guild_id' => guild_id.to_s)) }
     end
 
-    # Search guild members by query (simplified)
+    # Search guild members by query
     # @param guild_id [String, Snowflake] Guild ID
     # @param query [String] Search query (username/nickname prefix)
     # @param limit [Integer] Max results (1-100, default 25)
@@ -757,7 +760,7 @@ module DiscordRDA
       data.map { |m| Member.new(m.merge('guild_id' => guild_id.to_s)) }
     end
 
-    # Modify a guild member (simplified)
+    # Modify a guild member
     # @param guild_id [String, Snowflake] Guild ID
     # @param user_id [String, Snowflake] User ID
     # @param options [Hash] Options to modify (nick, roles, mute, deaf, channel_id)
@@ -836,7 +839,7 @@ module DiscordRDA
       @rest.delete("/guilds/#{guild_id}/members/#{user_id}", headers: headers)
     end
 
-    # === Guild Roles (Simplified) ===
+    # === Guild Roles ===
 
     # Get guild roles
     # @param guild_id [String, Snowflake] Guild ID
@@ -846,14 +849,14 @@ module DiscordRDA
       data.map { |r| Role.new(r.merge('guild_id' => guild_id.to_s)) }
     end
 
-    # Create guild role (simplified)
+    # Create guild role
     # @param guild_id [String, Snowflake] Guild ID
     # @param name [String] Role name
     # @param options [Hash] Optional settings (permissions, color, hoist, mentionable)
     # @return [Role] Created role
-    def create_guild_role(guild_id, name:, **options)
+    def create_guild_role(guild_id, name:, reason: nil, **options)
       payload = { name: name }.merge(options.slice(:permissions, :color, :hoist, :mentionable, :icon, :unicode_emoji))
-      data = @rest.post("/guilds/#{guild_id}/roles", body: payload)
+      data = @rest.post("/guilds/#{guild_id}/roles", body: payload, headers: audit_log_headers(reason))
       Role.new(data.merge('guild_id' => guild_id.to_s))
     end
 
@@ -862,9 +865,9 @@ module DiscordRDA
     # @param role_id [String, Snowflake] Role ID
     # @param options [Hash] Settings to modify
     # @return [Role] Updated role
-    def modify_guild_role(guild_id, role_id, **options)
+    def modify_guild_role(guild_id, role_id, reason: nil, **options)
       payload = options.slice(:name, :permissions, :color, :hoist, :mentionable, :icon, :unicode_emoji)
-      data = @rest.patch("/guilds/#{guild_id}/roles/#{role_id}", body: payload)
+      data = @rest.patch("/guilds/#{guild_id}/roles/#{role_id}", body: payload, headers: audit_log_headers(reason))
       Role.new(data.merge('guild_id' => guild_id.to_s))
     end
 
@@ -891,14 +894,19 @@ module DiscordRDA
       @rest.delete("/guilds/#{guild_id}/roles/#{role_id}", headers: headers)
     end
 
-    # === Guild Bans (Simplified) ===
+    # === Guild Bans ===
 
-    # Get guild bans (simplified - no pagination)
+    # Get guild bans
     # @param guild_id [String, Snowflake] Guild ID
     # @param limit [Integer] Max bans (1-1000, default 100)
+    # @param before [String, Snowflake, nil] Cursor for pagination
+    # @param after [String, Snowflake, nil] Cursor for pagination
     # @return [Array<Hash>] Bans (user + reason data)
-    def guild_bans(guild_id, limit: 100)
-      data = @rest.get("/guilds/#{guild_id}/bans", params: { limit: limit })
+    def guild_bans(guild_id, limit: 100, before: nil, after: nil)
+      params = { limit: limit }
+      params[:before] = before.to_s if before
+      params[:after] = after.to_s if after
+      data = @rest.get("/guilds/#{guild_id}/bans", params: params)
       data.map { |b| { user: User.new(b['user']), reason: b['reason'] } }
     end
 
@@ -936,42 +944,48 @@ module DiscordRDA
       @rest.delete("/guilds/#{guild_id}/bans/#{user_id}", headers: headers)
     end
 
-    # === Webhooks (Simplified) ===
+    # === Webhooks ===
 
     # Create a webhook
     # @param channel_id [String, Snowflake] Channel ID
     # @param name [String] Webhook name
     # @param avatar [String] Base64-encoded avatar image (optional)
-    # @return [Hash] Webhook data
-    def create_webhook(channel_id, name:, avatar: nil)
+    # @return [Webhook] Webhook data
+    def create_webhook(channel_id, name:, avatar: nil, reason: nil)
       payload = { name: name }
       payload[:avatar] = avatar if avatar
-      @rest.post("/channels/#{channel_id}/webhooks", body: payload)
+      Webhook.new(@rest.post("/channels/#{channel_id}/webhooks", body: payload, headers: audit_log_headers(reason)))
     end
 
     # Get channel webhooks
     # @param channel_id [String, Snowflake] Channel ID
-    # @return [Array<Hash>] Webhooks
+    # @return [Array<Webhook>] Webhooks
     def channel_webhooks(channel_id)
-      @rest.get("/channels/#{channel_id}/webhooks")
+      @rest.get("/channels/#{channel_id}/webhooks").map { |hook| Webhook.new(hook) }
     end
 
     # Get guild webhooks
     # @param guild_id [String, Snowflake] Guild ID
-    # @return [Array<Hash>] Webhooks
+    # @return [Array<Webhook>] Webhooks
     def guild_webhooks(guild_id)
-      @rest.get("/guilds/#{guild_id}/webhooks")
+      @rest.get("/guilds/#{guild_id}/webhooks").map { |hook| Webhook.new(hook) }
     end
 
-    # Execute webhook (simplified)
+    # Execute webhook
     # @param webhook_id [String, Snowflake] Webhook ID
     # @param token [String] Webhook token
     # @param content [String] Message content
     # @param options [Hash] Options (username, avatar_url, embeds, etc.)
-    # @return [void]
+    # @option options [Boolean] :wait Return the created message
+    # @option options [String, Snowflake] :thread_id Execute in a thread
+    # @return [Message, nil]
     def execute_webhook(webhook_id, token, content = nil, **options)
-      payload = { content: content }.merge(options.slice(:username, :avatar_url, :embeds, :components, :allowed_mentions))
-      @rest.post("/webhooks/#{webhook_id}/#{token}", body: payload)
+      params = {}
+      params[:wait] = options[:wait] unless options[:wait].nil?
+      params[:thread_id] = options[:thread_id].to_s if options[:thread_id]
+      payload = { content: content }.merge(options.slice(:username, :avatar_url, :embeds, :components, :allowed_mentions, :tts))
+      response = @rest.post("/webhooks/#{webhook_id}/#{token}", body: payload, params: params)
+      response.is_a?(Hash) ? Message.new(response) : nil
     end
 
     # Delete a webhook
@@ -985,9 +999,9 @@ module DiscordRDA
 
     # Get a webhook by ID
     # @param webhook_id [String, Snowflake] Webhook ID
-    # @return [Hash, nil] Webhook payload
+    # @return [Webhook, nil] Webhook payload
     def webhook(webhook_id)
-      @rest.get("/webhooks/#{webhook_id}")
+      Webhook.new(@rest.get("/webhooks/#{webhook_id}"))
     rescue RestClient::NotFoundError
       nil
     end
@@ -995,9 +1009,9 @@ module DiscordRDA
     # Get a webhook by ID and token
     # @param webhook_id [String, Snowflake] Webhook ID
     # @param token [String] Webhook token
-    # @return [Hash, nil] Webhook payload
+    # @return [Webhook, nil] Webhook payload
     def webhook_with_token(webhook_id, token)
-      @rest.get("/webhooks/#{webhook_id}/#{token}")
+      Webhook.new(@rest.get("/webhooks/#{webhook_id}/#{token}"))
     rescue RestClient::NotFoundError
       nil
     end
@@ -1007,10 +1021,10 @@ module DiscordRDA
     # @param name [String, nil] New webhook name
     # @param avatar [String, nil] Base64 avatar data
     # @param channel_id [String, Snowflake, nil] New channel ID
-    # @return [Hash] Updated webhook payload
-    def modify_webhook(webhook_id, name: nil, avatar: nil, channel_id: nil)
+    # @return [Webhook] Updated webhook payload
+    def modify_webhook(webhook_id, name: nil, avatar: nil, channel_id: nil, reason: nil)
       payload = { name: name, avatar: avatar, channel_id: channel_id&.to_s }.compact
-      @rest.patch("/webhooks/#{webhook_id}", body: payload)
+      Webhook.new(@rest.patch("/webhooks/#{webhook_id}", body: payload, headers: audit_log_headers(reason)))
     end
 
     # Modify a webhook using its token
@@ -1018,10 +1032,10 @@ module DiscordRDA
     # @param token [String] Webhook token
     # @param name [String, nil] New webhook name
     # @param avatar [String, nil] Base64 avatar data
-    # @return [Hash] Updated webhook payload
+    # @return [Webhook] Updated webhook payload
     def modify_webhook_with_token(webhook_id, token, name: nil, avatar: nil)
       payload = { name: name, avatar: avatar }.compact
-      @rest.patch("/webhooks/#{webhook_id}/#{token}", body: payload)
+      Webhook.new(@rest.patch("/webhooks/#{webhook_id}/#{token}", body: payload))
     end
 
     # Execute a Slack-compatible webhook
@@ -1085,7 +1099,7 @@ module DiscordRDA
       @rest.delete("/webhooks/#{webhook_id}/#{token}/messages/#{message_id}", params: params)
     end
 
-    # === Channel Management (Simplified) ===
+    # === Channel Management ===
 
     # Get guild channels
     # @param guild_id [String, Snowflake] Guild ID
@@ -1145,9 +1159,9 @@ module DiscordRDA
 
     # Get integrations for a guild
     # @param guild_id [String, Snowflake] Guild ID
-    # @return [Array<Hash>] Integration payloads
+    # @return [Array<Integration>] Integration payloads
     def guild_integrations(guild_id)
-      @rest.get("/guilds/#{guild_id}/integrations")
+      @rest.get("/guilds/#{guild_id}/integrations").map { |integration| Integration.new(integration.merge('guild_id' => guild_id.to_s)) }
     end
 
     # Delete a guild integration
@@ -1635,7 +1649,7 @@ module DiscordRDA
       @rest.post("/channels/#{channel_id}/send-soundboard-sound", body: payload)
     end
 
-    # Create guild channel (simplified)
+    # Create guild channel
     # @param guild_id [String, Snowflake] Guild ID
     # @param name [String] Channel name
     # @param type [Integer] Channel type (0=text, 2=voice, 4=category, etc.)

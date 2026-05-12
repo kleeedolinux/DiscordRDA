@@ -373,10 +373,22 @@ module DiscordRDA
       { error: 'Unable to retrieve' }
     end
 
-    # Get CPU usage (simplified)
+    # Get process CPU usage
     # @return [Hash] CPU usage info
     def cpu_usage
-      # This is a simplified implementation
+      process_times = Process.times
+      elapsed = uptime_seconds
+      total_cpu_seconds = process_times.utime + process_times.stime
+      cpu_percent = elapsed.positive? ? ((total_cpu_seconds / elapsed) * 100.0).round(2) : 0.0
+
+      {
+        available: true,
+        user_seconds: process_times.utime.round(4),
+        system_seconds: process_times.stime.round(4),
+        total_seconds: total_cpu_seconds.round(4),
+        utilization_percent: cpu_percent
+      }
+    rescue StandardError
       { available: false }
     end
 
