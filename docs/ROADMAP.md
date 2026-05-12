@@ -60,8 +60,8 @@ This document provides a complete status of DiscordRDA implementation.
 | **Dashboard Data** | ✅ Implemented | JSON API for dashboards |
 | **Health Checks** | ✅ Implemented | Comprehensive health monitoring with status reporting |
 | **Real-time Analytics** | ✅ Implemented | Per-second event tracking |
-| **Prometheus Export** | ❌ Not Implemented | Planned for enterprise tier |
-| **Grafana Integration** | ❌ Not Implemented | Planned for enterprise tier |
+| **Prometheus Export** | ✅ Implemented | `AnalyticsPlugin#prometheus_export` |
+| **Grafana Integration** | ✅ Implemented | `AnalyticsPlugin#grafana_dashboard` |
 
 ---
 
@@ -277,7 +277,7 @@ This document provides a complete status of DiscordRDA implementation.
 | **Sticker** | ✅ Implemented | Full props, URL generation, guild sticker management |
 | **Interaction** | ✅ Complete | Full slash command, component, modal support |
 | **Interaction Event** | ✅ Implemented | Full event with interaction handler | |
-| **Audit Log Entry** | 🔄 Partial | Raw audit log payloads available via `Bot#guild_audit_log` | |
+| **Audit Log Entry** | ✅ Implemented | `AuditLog` and `AuditLogEntry` wrappers | |
 | **Application** | ✅ Implemented | Core metadata, owner, team |
 | **Team** | ✅ Implemented | Core metadata and member access |
 
@@ -367,17 +367,17 @@ This document provides a complete status of DiscordRDA implementation.
 | Feature | Status | Notes |
 |---------|--------|-------|
 | **Docker Support** | ✅ Implemented | `Dockerfile` and `.dockerignore` added |
-| **Kubernetes Operator** | ❌ Not Implemented | Planned for v1.0 |
+| **Kubernetes Operator** | 🔄 Partial | Kubernetes deployment/service manifests added; no controller/operator yet |
 | **Process Manager Integration** | ✅ Implemented | systemd and supervisor templates added |
 | **Graceful Shutdown** | ✅ Implemented | `INT` and `TERM` traps call `Bot#stop` |
 | **Signal Handling** | ✅ Implemented | Explicit `Signal.trap` handlers for `INT` and `TERM` |
-| **Configuration Files** | ⚠️ Simplified | Ruby-only, no YAML/TOML |
+| **Configuration Files** | ✅ Implemented | `Configuration.load` supports JSON and YAML |
 | **Environment Variables** | ✅ Implemented | Full env var support |
-| **Secrets Management** | ❌ Not Implemented | Vault integration planned |
+| **Secrets Management** | ✅ Implemented | `Secrets.fetch` and file-backed secrets loaders |
 | **Logging Formats** | ✅ Implemented | Simple and structured JSON |
-| **Log Rotation** | ❌ Not Implemented | External tool needed |
-| **Tracing (OpenTelemetry)** | ❌ Not Implemented | Planned |
-| **Error Tracking (Sentry)** | ❌ Not Implemented | Planned |
+| **Log Rotation** | ✅ Implemented | File-backed logger with rotation support |
+| **Tracing (OpenTelemetry)** | ✅ Implemented | Internal tracer with OpenTelemetry handoff when the gem is present |
+| **Error Tracking (Sentry)** | ✅ Implemented | Internal tracker with Sentry handoff when the gem is present |
 
 ---
 
