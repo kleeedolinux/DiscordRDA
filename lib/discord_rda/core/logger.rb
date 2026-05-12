@@ -2,6 +2,7 @@
 
 require 'logger'
 require 'json'
+require 'fileutils'
 
 module DiscordRDA
   # Structured logging for DiscordRDA.
@@ -35,10 +36,10 @@ module DiscordRDA
     # @param level [Symbol] Log level
     # @param format [Symbol] Log format
     # @param output [IO] Output destination (default: STDOUT)
-    def initialize(level: :info, format: :structured, output: STDOUT)
+    def initialize(level: :info, format: :structured, output: STDOUT, file_path: nil, rotate_age: 7, rotate_size: 10_485_760)
       @level = level.to_sym
       @format = format.to_sym
-      @output = output
+      @output = build_output(output, file_path, rotate_age, rotate_size)
       @mutex = Mutex.new
     end
 
@@ -102,11 +103,24 @@ module DiscordRDA
 
     private
 
+    def build_output(output, file_path, rotate_age, rotate_size)
+      return output unless file_path
+
+      FileUtils.mkdir_p(File.dirname(file_path))
+      ::Logger::LogDevice.new(file_path, shift_age: rotate_age, shift_size: rotate_size)
+    end
+
     def log(level, message, context)
       return unless level_enabled?(level)
 
       entry = build_log_entry(level, message, context)
-      @mutex.synchronize { @output.puts(entry) }
+      @mutex.synchronize do
+        if @output.respond_to?(:puts)
+          @output.puts(entry)
+        else
+          @output.write("#{entry}\n")
+        end
+      end
     end
 
     def build_log_entry(level, message, context)

@@ -40,6 +40,12 @@ module DiscordRDA
     # @return [PluginRegistry] Plugin registry
     attr_reader :plugins
 
+    # @return [Tracer] Trace helper
+    attr_reader :tracer
+
+    # @return [ErrorTracker] Error tracking helper
+    attr_reader :error_tracker
+
     # @return [Boolean] Whether bot is running
     attr_reader :running
 
@@ -51,7 +57,15 @@ module DiscordRDA
     # @param options [Hash] Configuration options
     def initialize(token:, **options)
       @config = Configuration.new(options.merge(token: token))
-      @logger = Logger.new(level: @config.log_level, format: @config.log_format)
+      @logger = Logger.new(
+        level: @config.log_level,
+        format: @config.log_format,
+        file_path: @config.log_file_path,
+        rotate_age: @config.log_rotate_age,
+        rotate_size: @config.log_rotate_size
+      )
+      @tracer = Tracer.new(enabled: @config.trace_enabled, logger: @logger)
+      @error_tracker = ErrorTracker.new(enabled: @config.error_tracking, logger: @logger)
       @event_bus = EventBus.new(logger: @logger)
       @cache = build_cache
       @shard_manager = ShardManager.new(@config, @event_bus, @logger)
@@ -1214,7 +1228,7 @@ module DiscordRDA
     # @param before [String, Snowflake, nil] Pagination cursor
     # @param after [String, Snowflake, nil] Pagination cursor
     # @param limit [Integer, nil] Max entries
-    # @return [Hash] Audit log payload
+    # @return [AuditLog] Audit log payload
     def guild_audit_log(guild_id, user_id: nil, action_type: nil, before: nil, after: nil, limit: nil)
       params = {
         user_id: user_id&.to_s,
@@ -1223,7 +1237,7 @@ module DiscordRDA
         after: after&.to_s,
         limit: limit
       }.compact
-      @rest.get("/guilds/#{guild_id}/audit-logs", params: params)
+      AuditLog.new(@rest.get("/guilds/#{guild_id}/audit-logs", params: params))
     end
 
     # List scheduled events for a guild

@@ -334,4 +334,45 @@ module DiscordRDA
       end
     end
   end
+
+  class AuditLogEntry < Entity
+    attribute :target_id, type: :string
+    attribute :changes, type: :array, default: []
+    attribute :user_id, type: :snowflake
+    attribute :action_type, type: :integer
+    attribute :options, type: :hash
+    attribute :reason, type: :string
+
+    def user(users_index = nil)
+      return users_index[user_id.to_s] if users_index && user_id
+
+      @user ||= User.new(@raw_data['user']) if @raw_data['user']
+    end
+  end
+
+  class AuditLog
+    attr_reader :entries, :users, :webhooks, :integrations, :threads
+
+    def initialize(data = {})
+      @entries = (data['audit_log_entries'] || []).map { |entry| AuditLogEntry.new(entry) }
+      @users = (data['users'] || []).map { |user| User.new(user) }
+      @webhooks = data['webhooks'] || []
+      @integrations = data['integrations'] || []
+      @threads = (data['threads'] || []).map { |thread| Channel.new(thread) }
+      @application_commands = data['application_commands'] || []
+      @auto_moderation_rules = data['auto_moderation_rules'] || []
+    end
+
+    def users_index
+      @users_index ||= @users.each_with_object({}) { |user, index| index[user.id.to_s] = user }
+    end
+
+    def application_commands
+      @application_commands
+    end
+
+    def auto_moderation_rules
+      @auto_moderation_rules
+    end
+  end
 end

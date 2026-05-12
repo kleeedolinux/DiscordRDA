@@ -182,6 +182,45 @@ module DiscordRDA
       }
     end
 
+    def prometheus_export
+      data = summary
+
+      [
+        '# HELP discord_rda_uptime_seconds Process uptime in seconds',
+        '# TYPE discord_rda_uptime_seconds gauge',
+        "discord_rda_uptime_seconds #{data[:uptime]}",
+        '# HELP discord_rda_gateway_events_per_minute Gateway events per minute',
+        '# TYPE discord_rda_gateway_events_per_minute gauge',
+        "discord_rda_gateway_events_per_minute #{data[:gateway][:events_per_minute]}",
+        '# HELP discord_rda_rest_requests_per_minute REST requests per minute',
+        '# TYPE discord_rda_rest_requests_per_minute gauge',
+        "discord_rda_rest_requests_per_minute #{data[:rest][:requests_per_minute]}",
+        '# HELP discord_rda_cache_hit_rate Cache hit rate percentage',
+        '# TYPE discord_rda_cache_hit_rate gauge',
+        "discord_rda_cache_hit_rate #{data[:cache][:hit_rate]}",
+        '# HELP discord_rda_shards_total_guilds Guilds across shards',
+        '# TYPE discord_rda_shards_total_guilds gauge',
+        "discord_rda_shards_total_guilds #{data[:shards][:total_guilds]}"
+      ].join("\n") + "\n"
+    end
+
+    def grafana_dashboard(title: 'DiscordRDA Overview')
+      dashboard = {
+        title: title,
+        schemaVersion: 39,
+        version: 1,
+        editable: true,
+        panels: [
+          metric_panel(id: 1, title: 'Gateway Events / Min', expr: 'discord_rda_gateway_events_per_minute'),
+          metric_panel(id: 2, title: 'REST Requests / Min', expr: 'discord_rda_rest_requests_per_minute'),
+          metric_panel(id: 3, title: 'Cache Hit Rate', expr: 'discord_rda_cache_hit_rate'),
+          metric_panel(id: 4, title: 'Guilds', expr: 'discord_rda_shards_total_guilds')
+        ]
+      }
+
+      Oj.dump(dashboard, mode: :compat)
+    end
+
     # Run comprehensive health checks
     # @return [Hash] Health check results
     def run_health_checks
@@ -308,6 +347,17 @@ module DiscordRDA
         memory: memory_usage,
         cpu: cpu_usage,
         timestamp: Time.now.utc.iso8601
+      }
+    end
+
+    def metric_panel(id:, title:, expr:)
+      {
+        id: id,
+        type: 'stat',
+        title: title,
+        datasource: { type: 'prometheus', uid: '${DS_PROMETHEUS}' },
+        targets: [{ expr: expr, refId: "A#{id}" }],
+        gridPos: { h: 8, w: 12, x: ((id - 1) % 2) * 12, y: ((id - 1) / 2) * 8 }
       }
     end
 

@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require 'json'
+require 'yaml'
+
 module DiscordRDA
   # Immutable configuration for DiscordRDA.
   # Uses frozen hash to prevent mutation after initialization.
@@ -29,7 +32,13 @@ module DiscordRDA
       compression_threshold: 1024,
       intents: [:guilds],
       log_level: :info,
-      log_format: :structured
+      log_format: :structured,
+      log_output: :stdout,
+      log_file_path: nil,
+      log_rotate_age: 7,
+      log_rotate_size: 10_485_760,
+      trace_enabled: false,
+      error_tracking: false
     }.freeze
 
     # Valid intents mapping
@@ -108,6 +117,18 @@ module DiscordRDA
     # @return [Symbol] Log format (:simple, :structured)
     attr_reader :log_format
 
+    attr_reader :log_output
+
+    attr_reader :log_file_path
+
+    attr_reader :log_rotate_age
+
+    attr_reader :log_rotate_size
+
+    attr_reader :trace_enabled
+
+    attr_reader :error_tracking
+
     # Create a new configuration
     # @param options [Hash] Configuration options
     def initialize(options = {})
@@ -133,8 +154,18 @@ module DiscordRDA
       @intents = normalize_intents(config[:intents])
       @log_level = config[:log_level].to_sym
       @log_format = config[:log_format].to_sym
+      @log_output = config[:log_output].is_a?(Symbol) ? config[:log_output] : config[:log_output].to_s
+      @log_file_path = config[:log_file_path]
+      @log_rotate_age = config[:log_rotate_age].to_i
+      @log_rotate_size = config[:log_rotate_size].to_i
+      @trace_enabled = !!config[:trace_enabled]
+      @error_tracking = !!config[:error_tracking]
 
       freeze
+    end
+
+    def self.load(path, overrides: {})
+      new(load_file(path).merge(overrides))
     end
 
     # Calculate the intents bitmask for Gateway identify
@@ -170,11 +201,43 @@ module DiscordRDA
         compression_threshold: @compression_threshold,
         intents: @intents,
         log_level: @log_level,
-        log_format: @log_format
+        log_format: @log_format,
+        log_output: @log_output,
+        log_file_path: @log_file_path,
+        log_rotate_age: @log_rotate_age,
+        log_rotate_size: @log_rotate_size,
+        trace_enabled: @trace_enabled,
+        error_tracking: @error_tracking
       }
     end
 
     private
+
+    def self.load_file(path)
+      content = File.read(path)
+
+      case File.extname(path).downcase
+      when '.json'
+        symbolize_keys(JSON.parse(content))
+      when '.yml', '.yaml'
+        symbolize_keys(YAML.safe_load(content, permitted_classes: [Symbol], aliases: true) || {})
+      else
+        raise ArgumentError, "Unsupported configuration file format: #{path}"
+      end
+    end
+
+    def self.symbolize_keys(value)
+      case value
+      when Hash
+        value.each_with_object({}) do |(key, nested_value), hash|
+          hash[key.to_sym] = symbolize_keys(nested_value)
+        end
+      when Array
+        value.map { |item| symbolize_keys(item) }
+      else
+        value
+      end
+    end
 
     def normalize_shards(shards)
       return [:auto] if shards == :auto
