@@ -5,6 +5,8 @@ module DiscordRDA
   # Supports Chat Input Commands (slash), User Commands, and Message Commands.
   #
   class ApplicationCommand < Entity
+    EMPTY_EXECUTION_POLICY = {}.freeze
+
     # Command types
     TYPES = {
       chat_input: 1,      # Slash commands
@@ -117,7 +119,7 @@ module DiscordRDA
     end
 
     def execution_policy
-      @execution_policy ||= {}
+      @execution_policy || EMPTY_EXECUTION_POLICY
     end
 
     # Set the handler block
@@ -449,9 +451,10 @@ module DiscordRDA
     # Build and return ApplicationCommand
     # @return [ApplicationCommand] Command instance
     def build
-      cmd = ApplicationCommand.new(to_h)
+      cmd = ApplicationCommand.new(to_h).dup
       cmd.handler = @handler
       cmd.instance_variable_set(:@execution_policy, @execution_policy.dup)
+      cmd.freeze
       cmd
     end
 

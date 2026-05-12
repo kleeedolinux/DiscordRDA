@@ -51,8 +51,16 @@ module DiscordRDA
     # Initialize entity with data
     # @param data [Hash] Entity data
     def initialize(data = {})
-      @id = data['id'] ? Snowflake.new(data['id']) : nil
-      @raw_data = data.freeze
+      normalized_data = data.each_with_object({}) do |(key, value), hash|
+        hash[key.to_s] = value
+      end
+
+      normalized_data.each do |key, value|
+        instance_variable_set("@#{key}", value)
+      end
+
+      @id = normalized_data['id'] ? Snowflake.new(normalized_data['id']) : nil
+      @raw_data = normalized_data.freeze
       freeze
     end
 

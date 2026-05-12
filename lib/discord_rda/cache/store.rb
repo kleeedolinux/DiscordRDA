@@ -54,3 +54,5 @@ module DiscordRDA
     def keys(pattern)
       raise NotImplementedError
     end
+  end
+end

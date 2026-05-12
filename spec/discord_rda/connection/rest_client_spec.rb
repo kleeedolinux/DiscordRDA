@@ -8,18 +8,18 @@ RSpec.describe DiscordRDA::RestClient do
   let(:config) { instance_double(DiscordRDA::Configuration, token: 'token') }
 
   describe '#handle_response' do
+    let(:status) { 200 }
+    let(:body) { '' }
     let(:response) { instance_double('response', status: status, read: body) }
 
     it 'returns nil for successful empty responses' do
-      status = 204
-      body = ''
+      allow(response).to receive(:status).and_return(204)
 
       expect(client.send(:handle_response, response)).to be_nil
     end
 
     it 'returns plain text when the response is not json' do
-      status = 200
-      body = 'ok'
+      allow(response).to receive(:read).and_return('ok')
 
       expect(client.send(:handle_response, response)).to eq('ok')
     end

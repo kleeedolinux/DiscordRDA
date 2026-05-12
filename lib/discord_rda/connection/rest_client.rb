@@ -4,6 +4,7 @@ require 'async/http/internet'
 require 'async/http/endpoint'
 require 'cgi'
 require 'net/http/post/multipart'
+require 'oj'
 
 module DiscordRDA
   # HTTP client for Discord REST API.

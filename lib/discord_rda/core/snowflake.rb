@@ -55,7 +55,7 @@ module DiscordRDA
     # Get the timestamp from the snowflake
     # @return [Time] The timestamp (UTC)
     def timestamp
-      @timestamp ||= Time.at(((@value >> 22) + DISCORD_EPOCH) / 1000.0).utc
+      Time.at(((@value >> 22) + DISCORD_EPOCH) / 1000.0).utc
     end
     alias time timestamp
 
