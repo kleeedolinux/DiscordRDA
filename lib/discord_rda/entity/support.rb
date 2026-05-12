@@ -291,4 +291,47 @@ module DiscordRDA
       @user ||= User.new(@raw_data['user']) if @raw_data['user']
     end
   end
+
+  class Application < Entity
+    attribute :name, type: :string
+    attribute :icon, type: :string
+    attribute :description, type: :string
+    attribute :rpc_origins, type: :array, default: []
+    attribute :bot_public, type: :boolean, default: true
+    attribute :bot_require_code_grant, type: :boolean, default: false
+    attribute :terms_of_service_url, type: :string
+    attribute :privacy_policy_url, type: :string
+    attribute :summary, type: :string
+    attribute :verify_key, type: :string
+    attribute :cover_image, type: :string
+    attribute :flags, type: :integer, default: 0
+    attribute :approximate_guild_count, type: :integer
+    attribute :redirect_uris, type: :array, default: []
+    attribute :interactions_endpoint_url, type: :string
+    attribute :role_connections_verification_url, type: :string
+    attribute :tags, type: :array, default: []
+    attribute :custom_install_url, type: :string
+    attribute :install_params, type: :hash
+
+    def owner
+      @owner ||= User.new(@raw_data['owner']) if @raw_data['owner']
+    end
+
+    def team
+      @team ||= Team.new(@raw_data['team']) if @raw_data['team']
+    end
+  end
+
+  class Team < Entity
+    attribute :icon, type: :string
+    attribute :name, type: :string
+    attribute :owner_user_id, type: :snowflake
+
+    def members
+      (@raw_data['members'] || []).map do |member|
+        user = member['user'] ? User.new(member['user']) : nil
+        member.merge('user' => user)
+      end
+    end
+  end
 end

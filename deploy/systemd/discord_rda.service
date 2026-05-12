@@ -1,0 +1,17 @@
+[Unit]
+Description=DiscordRDA Bot
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/discord_rda
+Environment=RACK_ENV=production
+EnvironmentFile=-/etc/discord_rda.env
+ExecStart=/usr/bin/env bundle exec ruby bot.rb
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target

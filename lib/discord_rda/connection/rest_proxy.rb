@@ -130,7 +130,11 @@ module DiscordRDA
 
     def handle_response(response)
       body = response.read
-      data = body ? Oj.load(body) : nil
+      data = if body.nil? || body.empty?
+               nil
+             else
+               Oj.load(body)
+             end
 
       case response.status
       when 200..299

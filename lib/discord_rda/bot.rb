@@ -201,6 +201,7 @@ module DiscordRDA
     # @return [void]
     def run(async: false)
       @running = true
+      install_signal_handlers
 
       @logger.info('Starting DiscordRDA bot', version: VERSION, shards: @config.shards.length)
 
@@ -276,6 +277,33 @@ module DiscordRDA
       nil
     end
 
+    # Create a guild
+    # @param name [String] Guild name
+    # @param options [Hash] Optional guild creation payload
+    # @return [Guild] Created guild
+    def create_guild(name:, **options)
+      payload = { name: name }.merge(options).compact
+      data = @rest.post('/guilds', body: payload)
+      Guild.new(data)
+    end
+
+    # Modify a guild
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param reason [String, nil] Audit log reason
+    # @param options [Hash] Guild modification payload
+    # @return [Guild] Updated guild
+    def modify_guild(guild_id, reason: nil, **options)
+      data = @rest.patch("/guilds/#{guild_id}", body: options.compact, headers: audit_log_headers(reason))
+      Guild.new(data)
+    end
+
+    # Delete a guild
+    # @param guild_id [String, Snowflake] Guild ID
+    # @return [void]
+    def delete_guild(guild_id)
+      @rest.delete("/guilds/#{guild_id}")
+    end
+
     # Get a channel by ID
     # @param channel_id [String, Snowflake] Channel ID
     # @return [Channel, nil] Channel or nil
@@ -337,6 +365,25 @@ module DiscordRDA
       Message.new(data)
     rescue RestClient::NotFoundError
       nil
+    end
+
+    # Add a recipient to a group DM
+    # @param channel_id [String, Snowflake] Group DM channel ID
+    # @param user_id [String, Snowflake] User ID
+    # @param access_token [String] OAuth2 access token with gdm.join scope
+    # @param nick [String, nil] Nickname for the recipient in the group DM
+    # @return [void]
+    def add_group_dm_recipient(channel_id, user_id, access_token:, nick: nil)
+      payload = { access_token: access_token, nick: nick }.compact
+      @rest.put("/channels/#{channel_id}/recipients/#{user_id}", body: payload)
+    end
+
+    # Remove a recipient from a group DM
+    # @param channel_id [String, Snowflake] Group DM channel ID
+    # @param user_id [String, Snowflake] User ID
+    # @return [void]
+    def remove_group_dm_recipient(channel_id, user_id)
+      @rest.delete("/channels/#{channel_id}/recipients/#{user_id}")
     end
 
     # Trigger typing indicator for a channel
@@ -680,6 +727,42 @@ module DiscordRDA
       Member.new(data.merge('guild_id' => guild_id.to_s))
     end
 
+    # Add a member to a guild through OAuth2
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param user_id [String, Snowflake] User ID
+    # @param access_token [String] User OAuth2 access token
+    # @param options [Hash] Optional member settings
+    # @return [Hash] Discord add-member response
+    def add_guild_member(guild_id, user_id, access_token:, **options)
+      payload = {
+        access_token: access_token,
+        nick: options[:nick],
+        roles: options[:roles],
+        mute: options[:mute],
+        deaf: options[:deaf]
+      }.compact
+      @rest.put("/guilds/#{guild_id}/members/#{user_id}", body: payload)
+    end
+
+    # Modify the current bot member in a guild
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param nick [String, nil] New nickname
+    # @param reason [String, nil] Audit log reason
+    # @return [Member] Updated member
+    def modify_current_member(guild_id, nick: nil, reason: nil)
+      data = @rest.patch("/guilds/#{guild_id}/members/@me", body: { nick: nick }.compact, headers: audit_log_headers(reason))
+      Member.new(data.merge('guild_id' => guild_id.to_s))
+    end
+
+    # Modify the current bot nickname in a guild
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param nick [String, nil] New nickname
+    # @param reason [String, nil] Audit log reason
+    # @return [Hash] Discord nickname response
+    def modify_current_user_nick(guild_id, nick: nil, reason: nil)
+      @rest.patch("/guilds/#{guild_id}/members/@me/nick", body: { nick: nick }.compact, headers: audit_log_headers(reason))
+    end
+
     # Add role to guild member
     # @param guild_id [String, Snowflake] Guild ID
     # @param user_id [String, Snowflake] User ID
@@ -742,6 +825,19 @@ module DiscordRDA
       payload = options.slice(:name, :permissions, :color, :hoist, :mentionable, :icon, :unicode_emoji)
       data = @rest.patch("/guilds/#{guild_id}/roles/#{role_id}", body: payload)
       Role.new(data.merge('guild_id' => guild_id.to_s))
+    end
+
+    # Modify guild role positions
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param positions [Array<Hash>] Array of { id:, position: }
+    # @param reason [String, nil] Audit log reason
+    # @return [Array<Role>] Updated role ordering
+    def modify_guild_role_positions(guild_id, positions, reason: nil)
+      payload = positions.map do |position|
+        { id: (position[:id] || position['id']).to_s, position: position[:position] || position['position'] }
+      end
+      data = @rest.patch("/guilds/#{guild_id}/roles", body: payload, headers: audit_log_headers(reason))
+      data.map { |role| Role.new(role.merge('guild_id' => guild_id.to_s)) }
     end
 
     # Delete guild role
@@ -1111,6 +1207,393 @@ module DiscordRDA
       @rest.put("/guilds/#{guild_id}/onboarding", body: options)
     end
 
+    # Get audit log entries for a guild
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param user_id [String, Snowflake, nil] Filter by acting user
+    # @param action_type [Integer, nil] Filter by action type
+    # @param before [String, Snowflake, nil] Pagination cursor
+    # @param after [String, Snowflake, nil] Pagination cursor
+    # @param limit [Integer, nil] Max entries
+    # @return [Hash] Audit log payload
+    def guild_audit_log(guild_id, user_id: nil, action_type: nil, before: nil, after: nil, limit: nil)
+      params = {
+        user_id: user_id&.to_s,
+        action_type: action_type,
+        before: before&.to_s,
+        after: after&.to_s,
+        limit: limit
+      }.compact
+      @rest.get("/guilds/#{guild_id}/audit-logs", params: params)
+    end
+
+    # List scheduled events for a guild
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param with_user_count [Boolean] Include subscriber counts
+    # @return [Array<GuildScheduledEvent>] Scheduled events
+    def guild_scheduled_events(guild_id, with_user_count: false)
+      data = @rest.get("/guilds/#{guild_id}/scheduled-events", params: { with_user_count: with_user_count })
+      data.map { |event| GuildScheduledEvent.new(event) }
+    end
+
+    # Get a specific scheduled event
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param event_id [String, Snowflake] Event ID
+    # @param with_user_count [Boolean] Include subscriber count
+    # @return [GuildScheduledEvent, nil] Scheduled event
+    def guild_scheduled_event(guild_id, event_id, with_user_count: false)
+      data = @rest.get("/guilds/#{guild_id}/scheduled-events/#{event_id}", params: { with_user_count: with_user_count })
+      GuildScheduledEvent.new(data)
+    rescue RestClient::NotFoundError
+      nil
+    end
+
+    # Create a scheduled event
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param reason [String, nil] Audit log reason
+    # @param options [Hash] Scheduled event payload
+    # @return [GuildScheduledEvent] Created event
+    def create_guild_scheduled_event(guild_id, reason: nil, **options)
+      data = @rest.post("/guilds/#{guild_id}/scheduled-events", body: options.compact, headers: audit_log_headers(reason))
+      GuildScheduledEvent.new(data)
+    end
+
+    # Modify a scheduled event
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param event_id [String, Snowflake] Event ID
+    # @param reason [String, nil] Audit log reason
+    # @param options [Hash] Scheduled event payload
+    # @return [GuildScheduledEvent] Updated event
+    def modify_guild_scheduled_event(guild_id, event_id, reason: nil, **options)
+      data = @rest.patch("/guilds/#{guild_id}/scheduled-events/#{event_id}", body: options.compact, headers: audit_log_headers(reason))
+      GuildScheduledEvent.new(data)
+    end
+
+    # Delete a scheduled event
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param event_id [String, Snowflake] Event ID
+    # @return [void]
+    def delete_guild_scheduled_event(guild_id, event_id)
+      @rest.delete("/guilds/#{guild_id}/scheduled-events/#{event_id}")
+    end
+
+    # List users subscribed to a scheduled event
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param event_id [String, Snowflake] Event ID
+    # @param limit [Integer, nil] Max users
+    # @param with_member [Boolean] Include member objects
+    # @param before [String, Snowflake, nil] Pagination cursor
+    # @param after [String, Snowflake, nil] Pagination cursor
+    # @return [Array<Hash>] Subscriber payloads
+    def guild_scheduled_event_users(guild_id, event_id, limit: nil, with_member: false, before: nil, after: nil)
+      params = {
+        limit: limit,
+        with_member: with_member,
+        before: before&.to_s,
+        after: after&.to_s
+      }.compact
+      @rest.get("/guilds/#{guild_id}/scheduled-events/#{event_id}/users", params: params)
+    end
+
+    # Create a stage instance
+    # @param channel_id [String, Snowflake] Stage channel ID
+    # @param topic [String] Stage topic
+    # @param privacy_level [Integer, nil] Privacy level
+    # @param send_start_notification [Boolean, nil] Send notification
+    # @param guild_scheduled_event_id [String, Snowflake, nil] Associated scheduled event
+    # @return [Hash] Stage instance payload
+    def create_stage_instance(channel_id:, topic:, privacy_level: nil, send_start_notification: nil, guild_scheduled_event_id: nil)
+      payload = {
+        channel_id: channel_id.to_s,
+        topic: topic,
+        privacy_level: privacy_level,
+        send_start_notification: send_start_notification,
+        guild_scheduled_event_id: guild_scheduled_event_id&.to_s
+      }.compact
+      @rest.post('/stage-instances', body: payload)
+    end
+
+    # Get a stage instance
+    # @param channel_id [String, Snowflake] Stage channel ID
+    # @return [Hash, nil] Stage instance payload
+    def stage_instance(channel_id)
+      @rest.get("/stage-instances/#{channel_id}")
+    rescue RestClient::NotFoundError
+      nil
+    end
+
+    # Modify a stage instance
+    # @param channel_id [String, Snowflake] Stage channel ID
+    # @param topic [String, nil] Updated topic
+    # @param privacy_level [Integer, nil] Updated privacy level
+    # @return [Hash] Updated stage instance payload
+    def modify_stage_instance(channel_id, topic: nil, privacy_level: nil)
+      @rest.patch("/stage-instances/#{channel_id}", body: { topic: topic, privacy_level: privacy_level }.compact)
+    end
+
+    # Delete a stage instance
+    # @param channel_id [String, Snowflake] Stage channel ID
+    # @param reason [String, nil] Audit log reason
+    # @return [void]
+    def delete_stage_instance(channel_id, reason: nil)
+      @rest.delete("/stage-instances/#{channel_id}", headers: audit_log_headers(reason))
+    end
+
+    # List stickers for a guild
+    # @param guild_id [String, Snowflake] Guild ID
+    # @return [Array<Sticker>] Guild stickers
+    def guild_stickers(guild_id)
+      data = @rest.get("/guilds/#{guild_id}/stickers")
+      data.map { |sticker| Sticker.new(sticker) }
+    end
+
+    # Get a guild sticker
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param sticker_id [String, Snowflake] Sticker ID
+    # @return [Sticker, nil] Sticker
+    def guild_sticker(guild_id, sticker_id)
+      data = @rest.get("/guilds/#{guild_id}/stickers/#{sticker_id}")
+      Sticker.new(data)
+    rescue RestClient::NotFoundError
+      nil
+    end
+
+    # Get a standard sticker
+    # @param sticker_id [String, Snowflake] Sticker ID
+    # @return [Sticker, nil] Sticker
+    def sticker(sticker_id)
+      data = @rest.get("/stickers/#{sticker_id}")
+      Sticker.new(data)
+    rescue RestClient::NotFoundError
+      nil
+    end
+
+    # List available premium sticker packs
+    # @return [Hash] Sticker pack payload
+    def sticker_packs
+      @rest.get('/sticker-packs')
+    end
+
+    # Get guild templates
+    # @param guild_id [String, Snowflake] Guild ID
+    # @return [Array<Hash>] Template payloads
+    def guild_templates(guild_id)
+      @rest.get("/guilds/#{guild_id}/templates")
+    end
+
+    # Create a guild template
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param name [String] Template name
+    # @param description [String, nil] Template description
+    # @return [Hash] Template payload
+    def create_guild_template(guild_id, name:, description: nil)
+      @rest.post("/guilds/#{guild_id}/templates", body: { name: name, description: description }.compact)
+    end
+
+    # Sync a guild template
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param code [String] Template code
+    # @return [Hash] Template payload
+    def sync_guild_template(guild_id, code)
+      @rest.put("/guilds/#{guild_id}/templates/#{code}")
+    end
+
+    # Modify a guild template
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param code [String] Template code
+    # @param name [String, nil] New template name
+    # @param description [String, nil] New template description
+    # @return [Hash] Template payload
+    def modify_guild_template(guild_id, code, name: nil, description: nil)
+      payload = { name: name, description: description }.compact
+      @rest.patch("/guilds/#{guild_id}/templates/#{code}", body: payload)
+    end
+
+    # Delete a guild template
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param code [String] Template code
+    # @return [Hash] Deleted template payload
+    def delete_guild_template(guild_id, code)
+      @rest.delete("/guilds/#{guild_id}/templates/#{code}")
+    end
+
+    # Fetch a guild template by code
+    # @param code [String] Template code
+    # @return [Hash, nil] Template payload
+    def guild_template(code)
+      @rest.get("/guilds/templates/#{code}")
+    rescue RestClient::NotFoundError
+      nil
+    end
+
+    # Create a guild from a template
+    # @param code [String] Template code
+    # @param name [String] Guild name
+    # @param icon [String, nil] Base64 icon data
+    # @return [Guild] Created guild
+    def create_guild_from_template(code, name:, icon: nil)
+      data = @rest.post("/guilds/templates/#{code}", body: { name: name, icon: icon }.compact)
+      Guild.new(data)
+    end
+
+    # List auto moderation rules for a guild
+    # @param guild_id [String, Snowflake] Guild ID
+    # @return [Array<AutoModerationRule>] Rules
+    def auto_moderation_rules(guild_id)
+      data = @rest.get("/guilds/#{guild_id}/auto-moderation/rules")
+      data.map { |rule| AutoModerationRule.new(rule) }
+    end
+
+    # Get a specific auto moderation rule
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param rule_id [String, Snowflake] Rule ID
+    # @return [AutoModerationRule, nil] Rule
+    def auto_moderation_rule(guild_id, rule_id)
+      data = @rest.get("/guilds/#{guild_id}/auto-moderation/rules/#{rule_id}")
+      AutoModerationRule.new(data)
+    rescue RestClient::NotFoundError
+      nil
+    end
+
+    # Create an auto moderation rule
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param reason [String, nil] Audit log reason
+    # @param options [Hash] Rule payload
+    # @return [AutoModerationRule] Created rule
+    def create_auto_moderation_rule(guild_id, reason: nil, **options)
+      data = @rest.post("/guilds/#{guild_id}/auto-moderation/rules", body: options.compact, headers: audit_log_headers(reason))
+      AutoModerationRule.new(data)
+    end
+
+    # Modify an auto moderation rule
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param rule_id [String, Snowflake] Rule ID
+    # @param reason [String, nil] Audit log reason
+    # @param options [Hash] Rule payload
+    # @return [AutoModerationRule] Updated rule
+    def modify_auto_moderation_rule(guild_id, rule_id, reason: nil, **options)
+      data = @rest.patch("/guilds/#{guild_id}/auto-moderation/rules/#{rule_id}", body: options.compact, headers: audit_log_headers(reason))
+      AutoModerationRule.new(data)
+    end
+
+    # Delete an auto moderation rule
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param rule_id [String, Snowflake] Rule ID
+    # @param reason [String, nil] Audit log reason
+    # @return [void]
+    def delete_auto_moderation_rule(guild_id, rule_id, reason: nil)
+      @rest.delete("/guilds/#{guild_id}/auto-moderation/rules/#{rule_id}", headers: audit_log_headers(reason))
+    end
+
+    # Get SKUs for the current application
+    # @param application_id [String, Snowflake, nil] Application ID
+    # @return [Array<Hash>] SKU payloads
+    def skus(application_id: nil)
+      app_id = application_id || application_id_for_rest
+      @rest.get("/applications/#{app_id}/skus")
+    end
+
+    # Get entitlements for the current application
+    # @param application_id [String, Snowflake, nil] Application ID
+    # @param options [Hash] Query filters
+    # @return [Array<Hash>] Entitlement payloads
+    def entitlements(application_id: nil, **options)
+      app_id = application_id || application_id_for_rest
+      params = normalize_rest_params(options, :before, :after, :guild_id, :user_id, :limit, :exclude_ended)
+      params[:sku_ids] = Array(options[:sku_ids]).map(&:to_s).join(',') if options[:sku_ids]
+      @rest.get("/applications/#{app_id}/entitlements", params: params)
+    end
+
+    # Create a test entitlement
+    # @param sku_id [String, Snowflake] SKU ID
+    # @param owner_id [String, Snowflake] User or guild owner ID
+    # @param owner_type [Integer] 1 for guild, 2 for user
+    # @param application_id [String, Snowflake, nil] Application ID
+    # @return [Hash] Entitlement payload
+    def create_test_entitlement(sku_id:, owner_id:, owner_type:, application_id: nil)
+      app_id = application_id || application_id_for_rest
+      payload = { sku_id: sku_id.to_s, owner_id: owner_id.to_s, owner_type: owner_type }
+      @rest.post("/applications/#{app_id}/entitlements", body: payload)
+    end
+
+    # Delete a test entitlement
+    # @param entitlement_id [String, Snowflake] Entitlement ID
+    # @param application_id [String, Snowflake, nil] Application ID
+    # @return [void]
+    def delete_test_entitlement(entitlement_id, application_id: nil)
+      app_id = application_id || application_id_for_rest
+      @rest.delete("/applications/#{app_id}/entitlements/#{entitlement_id}")
+    end
+
+    # Consume an entitlement
+    # @param entitlement_id [String, Snowflake] Entitlement ID
+    # @param application_id [String, Snowflake, nil] Application ID
+    # @return [void]
+    def consume_entitlement(entitlement_id, application_id: nil)
+      app_id = application_id || application_id_for_rest
+      @rest.post("/applications/#{app_id}/entitlements/#{entitlement_id}/consume")
+    end
+
+    # Get default soundboard sounds
+    # @return [Hash] Soundboard payload
+    def default_soundboard_sounds
+      @rest.get('/soundboard-default-sounds')
+    end
+
+    # Get guild soundboard sounds
+    # @param guild_id [String, Snowflake] Guild ID
+    # @return [Hash] Soundboard payload
+    def guild_soundboard_sounds(guild_id)
+      @rest.get("/guilds/#{guild_id}/soundboard-sounds")
+    end
+
+    # Get a single guild soundboard sound
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param sound_id [String, Snowflake] Sound ID
+    # @return [Hash, nil] Soundboard sound payload
+    def guild_soundboard_sound(guild_id, sound_id)
+      @rest.get("/guilds/#{guild_id}/soundboard-sounds/#{sound_id}")
+    rescue RestClient::NotFoundError
+      nil
+    end
+
+    # Create a guild soundboard sound
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param reason [String, nil] Audit log reason
+    # @param options [Hash] Soundboard payload
+    # @return [Hash] Soundboard sound payload
+    def create_guild_soundboard_sound(guild_id, reason: nil, **options)
+      @rest.post("/guilds/#{guild_id}/soundboard-sounds", body: options.compact, headers: audit_log_headers(reason))
+    end
+
+    # Modify a guild soundboard sound
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param sound_id [String, Snowflake] Sound ID
+    # @param reason [String, nil] Audit log reason
+    # @param options [Hash] Soundboard payload
+    # @return [Hash] Soundboard sound payload
+    def modify_guild_soundboard_sound(guild_id, sound_id, reason: nil, **options)
+      @rest.patch("/guilds/#{guild_id}/soundboard-sounds/#{sound_id}", body: options.compact, headers: audit_log_headers(reason))
+    end
+
+    # Delete a guild soundboard sound
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param sound_id [String, Snowflake] Sound ID
+    # @param reason [String, nil] Audit log reason
+    # @return [void]
+    def delete_guild_soundboard_sound(guild_id, sound_id, reason: nil)
+      @rest.delete("/guilds/#{guild_id}/soundboard-sounds/#{sound_id}", headers: audit_log_headers(reason))
+    end
+
+    # Send a soundboard sound in a voice-connected channel
+    # @param channel_id [String, Snowflake] Voice channel ID
+    # @param sound_id [String, Snowflake] Sound ID
+    # @param source_guild_id [String, Snowflake, nil] Source guild for default/shared sounds
+    # @return [void]
+    def send_soundboard_sound(channel_id, sound_id:, source_guild_id: nil)
+      payload = { sound_id: sound_id.to_s, source_guild_id: source_guild_id&.to_s }.compact
+      @rest.post("/channels/#{channel_id}/send-soundboard-sound", body: payload)
+    end
+
     # Create guild channel (simplified)
     # @param guild_id [String, Snowflake] Guild ID
     # @param name [String] Channel name
@@ -1247,6 +1730,18 @@ module DiscordRDA
 
     private
 
+    def application_id_for_rest
+      application_info['id']
+    end
+
+    def normalize_rest_params(options, *snowflake_keys)
+      options.each_with_object({}) do |(key, value), params|
+        next if value.nil?
+
+        params[key] = snowflake_keys.include?(key) ? value.to_s : value
+      end
+    end
+
     def audit_log_headers(reason)
       reason ? { 'X-Audit-Log-Reason' => CGI.escape(reason) } : {}
     end
@@ -1276,6 +1771,21 @@ module DiscordRDA
       User.api = client
       Guild.api = client
       Channel.api = client
+    end
+
+    def install_signal_handlers
+      return if defined?(@signal_handlers_installed) && @signal_handlers_installed
+
+      %w[INT TERM].each do |signal|
+        Signal.trap(signal) do
+          @logger.info('Received shutdown signal', signal: signal)
+          stop
+        rescue StandardError => e
+          @logger&.error('Failed during signal shutdown', signal: signal, error: e)
+        end
+      end
+
+      @signal_handlers_installed = true
     end
 
     def setup_interaction_handlers

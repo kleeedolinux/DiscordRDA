@@ -1,0 +1,9 @@
+.git
+.bundle
+vendor
+tmp
+log
+.codex
+spec
+examples
+docs
