@@ -299,7 +299,7 @@ This document provides a complete status of DiscordRDA implementation.
 | **Guild Ban Add** | ✅ Implemented | Full event with guild context |
 | **Guild Ban Remove** | ✅ Implemented | Full event with guild context |
 | **Guild Emojis Update** | ✅ Implemented | Full event with emoji changes |
-| **GUILD_INTEGRATIONS_UPDATE** | ⚠️ Simplified | Basic event |
+| **GUILD_INTEGRATIONS_UPDATE** | ✅ Implemented | Full payload wrapper for the available guild integration update data |
 | **Guild Member Add** | ✅ Implemented | Full member with inviter data |
 | **Guild Member Remove** | ✅ Implemented | Full event with guild context |
 | **Guild Member Update** | ✅ Implemented | Full with role/nick changes |
@@ -315,16 +315,16 @@ This document provides a complete status of DiscordRDA implementation.
 | **Message Reaction Remove** | ✅ Implemented | Full with user context |
 | **Message Reaction Remove All** | ✅ Implemented | Full with jump URL |
 | **Message Reaction Remove Emoji** | ✅ Implemented | Full emoji context |
-| **PRESENCE_UPDATE** | ⚠️ Simplified | Basic event |
-| **TYPING_START** | ⚠️ Simplified | Basic event |
-| **USER_UPDATE** | ⚠️ Simplified | User entity |
-| **VOICE_STATE_UPDATE** | ⚠️ Simplified | Basic event |
-| **VOICE_SERVER_UPDATE** | ⚠️ Simplified | Basic event |
-| **WEBHOOKS_UPDATE** | ⚠️ Simplified | Basic event |
+| **PRESENCE_UPDATE** | ✅ Implemented | Typed presence wrapper with activities and client status |
+| **TYPING_START** | ✅ Implemented | Full typing payload with timestamps and member context |
+| **USER_UPDATE** | ✅ Implemented | Typed user wrapper |
+| **VOICE_STATE_UPDATE** | ✅ Implemented | Typed voice state wrapper with member/session access |
+| **VOICE_SERVER_UPDATE** | ✅ Implemented | Typed voice server payload wrapper |
+| **WEBHOOKS_UPDATE** | ✅ Implemented | Guild/channel scoped webhook update event |
 | **INTERACTION_CREATE** | ✅ Implemented | Full command system with subcommands, permissions, cooldowns |
-| **STAGE_INSTANCE_CREATE** | ⚠️ Simplified | Basic event |
-| **STAGE_INSTANCE_UPDATE** | ⚠️ Simplified | Basic event |
-| **STAGE_INSTANCE_DELETE** | ⚠️ Simplified | Basic event |
+| **STAGE_INSTANCE_CREATE** | ✅ Implemented | Typed stage instance wrapper |
+| **STAGE_INSTANCE_UPDATE** | ✅ Implemented | Typed stage instance wrapper |
+| **STAGE_INSTANCE_DELETE** | ✅ Implemented | Typed stage instance wrapper |
 | **THREAD_CREATE** | ✅ Implemented | Full with creator, guild context |
 | **THREAD_UPDATE** | ✅ Implemented | Full with guild context |
 | **THREAD_DELETE** | ✅ Implemented | Full with parent channel |
@@ -340,10 +340,10 @@ This document provides a complete status of DiscordRDA implementation.
 | **AUTO_MODERATION_RULE_UPDATE** | ✅ Implemented | Full with change tracking |
 | **AUTO_MODERATION_RULE_DELETE** | ✅ Implemented | Full rule entity |
 | **AUTO_MODERATION_ACTION_EXECUTION** | ✅ Implemented | Full action context |
-| **GUILD_AUDIT_LOG_ENTRY_CREATE** | ⚠️ Simplified | Basic event |
-| **ENTITLEMENT_CREATE** | ⚠️ Simplified | Basic event |
-| **ENTITLEMENT_UPDATE** | ⚠️ Simplified | Basic event |
-| **ENTITLEMENT_DELETE** | ⚠️ Simplified | Basic event |
+| **GUILD_AUDIT_LOG_ENTRY_CREATE** | ✅ Implemented | Typed audit log entry wrapper with guild context |
+| **ENTITLEMENT_CREATE** | ✅ Implemented | Typed entitlement wrapper |
+| **ENTITLEMENT_UPDATE** | ✅ Implemented | Typed entitlement wrapper |
+| **ENTITLEMENT_DELETE** | ✅ Implemented | Typed entitlement wrapper |
 
 ---
 
@@ -401,7 +401,7 @@ This document provides a complete status of DiscordRDA implementation.
 
 ### Critical
 1. **Voice Gateway** - Not implemented, bots cannot join voice channels
-2. **Interaction Response** - Basic support only, no full command system
+2. **Kubernetes Operator** - Only manifests exist today; there is still no controller/operator implementation
 3. **File Uploads** - ✅ Implemented | Multipart/form-data with proper handling |
 4. **Pagination** - ✅ Implemented | Automatic pagination for list endpoints |
 
