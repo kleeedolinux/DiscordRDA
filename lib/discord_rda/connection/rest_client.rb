@@ -264,7 +264,7 @@ module DiscordRDA
 
     def handle_response(response)
       body = response.read
-      data = body ? Oj.load(body) : nil
+      data = parse_response_body(body)
 
       case response.status
       when 200..299
@@ -284,6 +284,14 @@ module DiscordRDA
       else
         raise APIError.new(response.status, data)
       end
+    end
+
+    def parse_response_body(body)
+      return nil if body.nil? || body.empty?
+
+      Oj.load(body)
+    rescue Oj::ParseError
+      body
     end
 
     # REST API Errors

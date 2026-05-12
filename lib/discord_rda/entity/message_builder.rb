@@ -367,3 +367,5 @@ module DiscordRDA
       @components << menu
       self
     end
+  end
+end

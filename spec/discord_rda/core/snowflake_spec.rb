@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative '../spec_helper'
+require_relative '../../spec_helper'
 require 'discord_rda/core/snowflake'
 
 RSpec.describe DiscordRDA::Snowflake do

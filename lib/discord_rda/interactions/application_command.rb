@@ -204,9 +204,10 @@ module DiscordRDA
 
   # Builder for creating application commands with DSL
   class CommandBuilder
-    def initialize(name, description = nil)
+    def initialize(name, description = nil, type: 1)
       @name = name
       @description = description || ''
+      @type = type
       @options = []
       @name_localizations = {}
       @description_localizations = {}
@@ -214,6 +215,14 @@ module DiscordRDA
       @dm_permission = true
       @nsfw = false
       @handler = nil
+    end
+
+    # Set command type
+    # @param type [Integer, Symbol] Discord command type
+    # @return [self]
+    def type(type)
+      @type = type.is_a?(Symbol) ? ApplicationCommand::TYPES.fetch(type) : type
+      self
     end
 
     # Set localized name
@@ -346,8 +355,7 @@ module DiscordRDA
     # @param description [String] Subcommand description
     # @yield [CommandBuilder] Block for building subcommand options
     def subcommand(name, description, &block)
-      builder = CommandBuilder.new(name, description)
-      builder.instance_variable_set(:@type, 1) # sub_command type
+      builder = CommandBuilder.new(name, description, type: 1)
       block.call(builder) if block
       @options << builder.to_h
       self
@@ -358,8 +366,7 @@ module DiscordRDA
     # @param description [String] Group description
     # @yield [CommandBuilder] Block for building subcommands in this group
     def group(name, description, &block)
-      builder = CommandBuilder.new(name, description)
-      builder.instance_variable_set(:@type, 2) # sub_command_group type
+      builder = CommandBuilder.new(name, description, type: 2)
       block.call(builder) if block
       @options << builder.to_h
       self
@@ -408,6 +415,7 @@ module DiscordRDA
         options: @options.empty? ? nil : @options,
         default_member_permissions: @default_member_permissions,
         dm_permission: @dm_permission,
+        type: @type,
         nsfw: @nsfw
       }.compact
     end

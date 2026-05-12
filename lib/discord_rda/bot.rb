@@ -58,8 +58,7 @@ module DiscordRDA
       @rest = RestClient.new(@config, @logger)
 
       # Configure entity API clients
-      Message.api = @rest
-      Interaction.api = @rest
+      configure_entity_apis(@rest)
 
       setup_event_handlers
       setup_interaction_handlers
@@ -87,31 +86,14 @@ module DiscordRDA
     # @yield [CommandBuilder] DSL block for building command
     # @return [ApplicationCommand] Registered command
     def slash(name, description, **options, &block)
-      builder = CommandBuilder.new(name, description)
+      builder = CommandBuilder.new(name, description, type: options[:type] || 1)
       builder.dm_allowed(options[:dm_permission]) if options.key?(:dm_permission)
       builder.default_permissions(options[:default_member_permissions]) if options[:default_member_permissions]
       builder.nsfw(options[:nsfw]) if options[:nsfw]
 
       block.call(builder) if block
 
-      cmd = builder.build
-      cmd.instance_variable_set(:@application_id, me.id.to_s) rescue nil
-      cmd.instance_variable_set(:@guild_id, options[:guild_id].to_s) if options[:guild_id]
-
-      key = options[:guild_id] ? "#{name}:#{options[:guild_id]}" : name
-      @slash_commands[key] = cmd
-
-      # Register with Discord if we have application ID
-      if cmd.application_id
-        if options[:guild_id]
-          cmd.create_guild(self, options[:guild_id])
-        else
-          cmd.create_global(self)
-        end
-      end
-
-      @logger.info('Registered slash command', name: name, guild: options[:guild_id] || 'global')
-      cmd
+      register_application_command(builder.build, name: name, guild_id: options[:guild_id])
     end
 
     # Register a context menu command (user or message)
@@ -122,10 +104,13 @@ module DiscordRDA
     # @return [ApplicationCommand] Registered command
     def context_menu(type:, name:, **options, &block)
       cmd_type = type == :user ? 2 : 3
-      options[:type] = cmd_type
-      options[:description] = '' # Context menus don't have descriptions
+      builder = CommandBuilder.new(name, '', type: cmd_type)
+      builder.dm_allowed(options[:dm_permission]) if options.key?(:dm_permission)
+      builder.default_permissions(options[:default_member_permissions]) if options[:default_member_permissions]
+      builder.nsfw(options[:nsfw]) if options[:nsfw]
+      builder.handler(&block) if block
 
-      slash(name, '', **options, &block)
+      register_application_command(builder.build, name: name, guild_id: options[:guild_id])
     end
 
     # Bulk register global commands (replaces existing)
@@ -317,6 +302,15 @@ module DiscordRDA
       Message.new(data)
     end
 
+    # Crosspost a message in an announcement channel
+    # @param channel_id [String, Snowflake] Channel ID
+    # @param message_id [String, Snowflake] Message ID
+    # @return [Message] Crossposted message
+    def crosspost_message(channel_id, message_id)
+      data = @rest.post("/channels/#{channel_id}/messages/#{message_id}/crosspost")
+      Message.new(data)
+    end
+
     # Get messages from a channel with pagination (simplified)
     # @param channel_id [String, Snowflake] Channel ID
     # @param limit [Integer] Max messages to fetch (1-100, default 50)
@@ -345,6 +339,207 @@ module DiscordRDA
       nil
     end
 
+    # Trigger typing indicator for a channel
+    # @param channel_id [String, Snowflake] Channel ID
+    # @return [void]
+    def trigger_typing(channel_id)
+      @rest.post("/channels/#{channel_id}/typing")
+    end
+
+    # Get pinned messages for a channel
+    # @param channel_id [String, Snowflake] Channel ID
+    # @return [Array<Message>] Pinned messages
+    def pinned_messages(channel_id)
+      data = @rest.get("/channels/#{channel_id}/pins")
+      data.map { |message| Message.new(message) }
+    end
+
+    # Pin a channel message
+    # @param channel_id [String, Snowflake] Channel ID
+    # @param message_id [String, Snowflake] Message ID
+    # @param reason [String, nil] Audit log reason
+    # @return [void]
+    def pin_message(channel_id, message_id, reason: nil)
+      @rest.put("/channels/#{channel_id}/pins/#{message_id}", headers: audit_log_headers(reason))
+    end
+
+    # Unpin a channel message
+    # @param channel_id [String, Snowflake] Channel ID
+    # @param message_id [String, Snowflake] Message ID
+    # @param reason [String, nil] Audit log reason
+    # @return [void]
+    def unpin_message(channel_id, message_id, reason: nil)
+      @rest.delete("/channels/#{channel_id}/pins/#{message_id}", headers: audit_log_headers(reason))
+    end
+
+    # Edit a channel permission overwrite
+    # @param channel_id [String, Snowflake] Channel ID
+    # @param overwrite_id [String, Snowflake] Role or member ID
+    # @param allow [Integer, String] Allowed permissions bitfield
+    # @param deny [Integer, String] Denied permissions bitfield
+    # @param type [Integer] 0 for role, 1 for member
+    # @param reason [String, nil] Audit log reason
+    # @return [void]
+    def edit_channel_permissions(channel_id, overwrite_id, allow:, deny:, type:, reason: nil)
+      payload = {
+        allow: allow.to_s,
+        deny: deny.to_s,
+        type: type
+      }
+      @rest.put("/channels/#{channel_id}/permissions/#{overwrite_id}", body: payload, headers: audit_log_headers(reason))
+    end
+
+    # Delete a channel permission overwrite
+    # @param channel_id [String, Snowflake] Channel ID
+    # @param overwrite_id [String, Snowflake] Role or member overwrite ID
+    # @param reason [String, nil] Audit log reason
+    # @return [void]
+    def delete_channel_permission(channel_id, overwrite_id, reason: nil)
+      @rest.delete("/channels/#{channel_id}/permissions/#{overwrite_id}", headers: audit_log_headers(reason))
+    end
+
+    # Get invites for a channel
+    # @param channel_id [String, Snowflake] Channel ID
+    # @return [Array<Hash>] Invite payloads
+    def channel_invites(channel_id)
+      @rest.get("/channels/#{channel_id}/invites")
+    end
+
+    # Create a channel invite
+    # @param channel_id [String, Snowflake] Channel ID
+    # @param reason [String, nil] Audit log reason
+    # @yield [InviteBuilder] Optional invite builder block
+    # @return [Hash] Invite payload
+    def create_channel_invite(channel_id, reason: nil, **options, &block)
+      builder = InviteBuilder.new
+      options.each do |key, value|
+        builder.public_send(key, value) if builder.respond_to?(key)
+      end
+      block.call(builder) if block
+
+      @rest.post("/channels/#{channel_id}/invites", body: builder.to_h, headers: audit_log_headers(reason))
+    end
+
+    # Follow an announcement channel into a target channel
+    # @param channel_id [String, Snowflake] Source announcement channel ID
+    # @param webhook_channel_id [String, Snowflake] Destination channel ID
+    # @return [Hash] Followed channel response
+    def follow_news_channel(channel_id, webhook_channel_id)
+      @rest.post("/channels/#{channel_id}/followers", body: { webhook_channel_id: webhook_channel_id.to_s })
+    end
+
+    # Start a thread from an existing message
+    # @param channel_id [String, Snowflake] Parent channel ID
+    # @param message_id [String, Snowflake] Message ID
+    # @param name [String] Thread name
+    # @param auto_archive_duration [Integer, nil] Auto archive duration in minutes
+    # @param rate_limit_per_user [Integer, nil] Thread slowmode
+    # @return [Channel] Created thread
+    def start_thread_from_message(channel_id, message_id, name:, auto_archive_duration: nil, rate_limit_per_user: nil)
+      payload = {
+        name: name,
+        auto_archive_duration: auto_archive_duration,
+        rate_limit_per_user: rate_limit_per_user
+      }.compact
+      data = @rest.post("/channels/#{channel_id}/messages/#{message_id}/threads", body: payload)
+      Channel.new(data)
+    end
+
+    # Start a thread without a seed message
+    # @param channel_id [String, Snowflake] Parent channel ID
+    # @param name [String] Thread name
+    # @param type [Integer, nil] Thread type
+    # @param auto_archive_duration [Integer, nil] Auto archive duration in minutes
+    # @param invitable [Boolean, nil] Whether non-moderators can add users
+    # @param rate_limit_per_user [Integer, nil] Thread slowmode
+    # @return [Channel] Created thread
+    def start_thread(channel_id, name:, type: nil, auto_archive_duration: nil, invitable: nil, rate_limit_per_user: nil)
+      payload = {
+        name: name,
+        type: type,
+        auto_archive_duration: auto_archive_duration,
+        invitable: invitable,
+        rate_limit_per_user: rate_limit_per_user
+      }.compact
+      data = @rest.post("/channels/#{channel_id}/threads", body: payload)
+      Channel.new(data)
+    end
+
+    # Join a thread
+    # @param thread_id [String, Snowflake] Thread channel ID
+    # @return [void]
+    def join_thread(thread_id)
+      @rest.put("/channels/#{thread_id}/thread-members/@me")
+    end
+
+    # Add a user to a thread
+    # @param thread_id [String, Snowflake] Thread channel ID
+    # @param user_id [String, Snowflake] User ID
+    # @return [void]
+    def add_thread_member(thread_id, user_id)
+      @rest.put("/channels/#{thread_id}/thread-members/#{user_id}")
+    end
+
+    # Leave a thread
+    # @param thread_id [String, Snowflake] Thread channel ID
+    # @return [void]
+    def leave_thread(thread_id)
+      @rest.delete("/channels/#{thread_id}/thread-members/@me")
+    end
+
+    # Remove a user from a thread
+    # @param thread_id [String, Snowflake] Thread channel ID
+    # @param user_id [String, Snowflake] User ID
+    # @return [void]
+    def remove_thread_member(thread_id, user_id)
+      @rest.delete("/channels/#{thread_id}/thread-members/#{user_id}")
+    end
+
+    # Get a specific thread member
+    # @param thread_id [String, Snowflake] Thread channel ID
+    # @param user_id [String, Snowflake] User ID
+    # @param with_member [Boolean] Include member object when available
+    # @return [Hash, nil] Thread member payload
+    def thread_member(thread_id, user_id, with_member: false)
+      @rest.get("/channels/#{thread_id}/thread-members/#{user_id}", params: { with_member: with_member })
+    rescue RestClient::NotFoundError
+      nil
+    end
+
+    # List members in a thread
+    # @param thread_id [String, Snowflake] Thread channel ID
+    # @param with_member [Boolean] Include member objects when available
+    # @param after [String, Snowflake, nil] Cursor
+    # @param limit [Integer, nil] Max results
+    # @return [Array<Hash>] Thread member payloads
+    def thread_members(thread_id, with_member: false, after: nil, limit: nil)
+      params = { with_member: with_member }
+      params[:after] = after.to_s if after
+      params[:limit] = limit if limit
+      @rest.get("/channels/#{thread_id}/thread-members", params: params)
+    end
+
+    # List archived threads for a channel
+    # @param channel_id [String, Snowflake] Parent channel ID
+    # @param scope [Symbol] :public, :private, or :joined_private
+    # @param before [Time, String, nil] ISO8601 timestamp cursor
+    # @param limit [Integer, nil] Max threads to return
+    # @return [Hash] Archived thread response
+    def archived_threads(channel_id, scope: :public, before: nil, limit: nil)
+      path = case scope
+             when :public then "/channels/#{channel_id}/threads/archived/public"
+             when :private then "/channels/#{channel_id}/threads/archived/private"
+             when :joined_private then "/channels/#{channel_id}/users/@me/threads/archived/private"
+             else
+               raise ArgumentError, "Unknown archived thread scope: #{scope}"
+             end
+
+      params = {}
+      params[:before] = before.is_a?(Time) ? before.iso8601 : before if before
+      params[:limit] = limit if limit
+      @rest.get(path, params: params)
+    end
+
     # Enable scalable REST client (queue-based rate limiting)
     # @param proxy [Hash] Optional proxy configuration
     # @return [void]
@@ -352,6 +547,7 @@ module DiscordRDA
       @logger.info('Enabling scalable REST client')
       @scalable_rest = ScalableRestClient.new(@config, @logger, proxy: proxy)
       @scalable_rest.start
+      configure_entity_apis(@scalable_rest)
     end
 
     # Enable hot reload for development
@@ -650,6 +846,108 @@ module DiscordRDA
       @rest.delete(path)
     end
 
+    # Get a webhook by ID
+    # @param webhook_id [String, Snowflake] Webhook ID
+    # @return [Hash, nil] Webhook payload
+    def webhook(webhook_id)
+      @rest.get("/webhooks/#{webhook_id}")
+    rescue RestClient::NotFoundError
+      nil
+    end
+
+    # Get a webhook by ID and token
+    # @param webhook_id [String, Snowflake] Webhook ID
+    # @param token [String] Webhook token
+    # @return [Hash, nil] Webhook payload
+    def webhook_with_token(webhook_id, token)
+      @rest.get("/webhooks/#{webhook_id}/#{token}")
+    rescue RestClient::NotFoundError
+      nil
+    end
+
+    # Modify a webhook
+    # @param webhook_id [String, Snowflake] Webhook ID
+    # @param name [String, nil] New webhook name
+    # @param avatar [String, nil] Base64 avatar data
+    # @param channel_id [String, Snowflake, nil] New channel ID
+    # @return [Hash] Updated webhook payload
+    def modify_webhook(webhook_id, name: nil, avatar: nil, channel_id: nil)
+      payload = { name: name, avatar: avatar, channel_id: channel_id&.to_s }.compact
+      @rest.patch("/webhooks/#{webhook_id}", body: payload)
+    end
+
+    # Modify a webhook using its token
+    # @param webhook_id [String, Snowflake] Webhook ID
+    # @param token [String] Webhook token
+    # @param name [String, nil] New webhook name
+    # @param avatar [String, nil] Base64 avatar data
+    # @return [Hash] Updated webhook payload
+    def modify_webhook_with_token(webhook_id, token, name: nil, avatar: nil)
+      payload = { name: name, avatar: avatar }.compact
+      @rest.patch("/webhooks/#{webhook_id}/#{token}", body: payload)
+    end
+
+    # Execute a Slack-compatible webhook
+    # @param webhook_id [String, Snowflake] Webhook ID
+    # @param token [String] Webhook token
+    # @param payload [Hash] Slack webhook payload
+    # @return [Object] API response
+    def execute_slack_webhook(webhook_id, token, payload)
+      @rest.post("/webhooks/#{webhook_id}/#{token}/slack", body: payload)
+    end
+
+    # Execute a GitHub-compatible webhook
+    # @param webhook_id [String, Snowflake] Webhook ID
+    # @param token [String] Webhook token
+    # @param payload [Hash] GitHub webhook payload
+    # @return [Object] API response
+    def execute_github_webhook(webhook_id, token, payload)
+      @rest.post("/webhooks/#{webhook_id}/#{token}/github", body: payload)
+    end
+
+    # Get a webhook message
+    # @param webhook_id [String, Snowflake] Webhook ID
+    # @param token [String] Webhook token
+    # @param message_id [String, Snowflake] Message ID
+    # @param thread_id [String, Snowflake, nil] Thread channel ID
+    # @return [Message, nil] Webhook message
+    def webhook_message(webhook_id, token, message_id, thread_id: nil)
+      params = {}
+      params[:thread_id] = thread_id.to_s if thread_id
+      data = @rest.get("/webhooks/#{webhook_id}/#{token}/messages/#{message_id}", params: params)
+      Message.new(data)
+    rescue RestClient::NotFoundError
+      nil
+    end
+
+    # Edit a webhook message
+    # @param webhook_id [String, Snowflake] Webhook ID
+    # @param token [String] Webhook token
+    # @param message_id [String, Snowflake] Message ID
+    # @param thread_id [String, Snowflake, nil] Thread channel ID
+    # @param content [String, nil] New content
+    # @param options [Hash] Additional edit payload
+    # @return [Message] Updated message
+    def edit_webhook_message(webhook_id, token, message_id, thread_id: nil, content: nil, **options)
+      params = {}
+      params[:thread_id] = thread_id.to_s if thread_id
+      payload = { content: content }.merge(options).compact
+      data = @rest.patch("/webhooks/#{webhook_id}/#{token}/messages/#{message_id}", body: payload, params: params)
+      Message.new(data)
+    end
+
+    # Delete a webhook message
+    # @param webhook_id [String, Snowflake] Webhook ID
+    # @param token [String] Webhook token
+    # @param message_id [String, Snowflake] Message ID
+    # @param thread_id [String, Snowflake, nil] Thread channel ID
+    # @return [void]
+    def delete_webhook_message(webhook_id, token, message_id, thread_id: nil)
+      params = {}
+      params[:thread_id] = thread_id.to_s if thread_id
+      @rest.delete("/webhooks/#{webhook_id}/#{token}/messages/#{message_id}", params: params)
+    end
+
     # === Channel Management (Simplified) ===
 
     # Get guild channels
@@ -658,6 +956,159 @@ module DiscordRDA
     def guild_channels(guild_id)
       data = @rest.get("/guilds/#{guild_id}/channels")
       data.map { |c| Channel.new(c) }
+    end
+
+    # Get a guild preview
+    # @param guild_id [String, Snowflake] Guild ID
+    # @return [Hash, nil] Guild preview payload
+    def guild_preview(guild_id)
+      @rest.get("/guilds/#{guild_id}/preview")
+    rescue RestClient::NotFoundError
+      nil
+    end
+
+    # Get the expected prune count for a guild
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param days [Integer] Inactive days threshold
+    # @param include_roles [Array<String, Snowflake>] Optional role IDs
+    # @return [Integer, nil] Number of prunable members
+    def guild_prune_count(guild_id, days:, include_roles: nil)
+      params = { days: days }
+      params[:include_roles] = Array(include_roles).map(&:to_s).join(',') if include_roles
+      @rest.get("/guilds/#{guild_id}/prune", params: params)['pruned']
+    end
+
+    # Begin a guild prune
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param days [Integer] Inactive days threshold
+    # @param compute_prune_count [Boolean] Whether to include the prune count
+    # @param include_roles [Array<String, Snowflake>] Optional role IDs
+    # @param reason [String, nil] Audit log reason
+    # @return [Integer, nil] Number of pruned members when requested
+    def begin_guild_prune(guild_id, days:, compute_prune_count: true, include_roles: nil, reason: nil)
+      payload = { days: days, compute_prune_count: compute_prune_count }
+      payload[:include_roles] = Array(include_roles).map(&:to_s) if include_roles
+      response = @rest.post("/guilds/#{guild_id}/prune", body: payload, headers: audit_log_headers(reason))
+      response && response['pruned']
+    end
+
+    # Get voice regions for a guild
+    # @param guild_id [String, Snowflake] Guild ID
+    # @return [Array<Hash>] Voice regions
+    def guild_voice_regions(guild_id)
+      @rest.get("/guilds/#{guild_id}/regions")
+    end
+
+    # Get active invites for a guild
+    # @param guild_id [String, Snowflake] Guild ID
+    # @return [Array<Hash>] Invite payloads
+    def guild_invites(guild_id)
+      @rest.get("/guilds/#{guild_id}/invites")
+    end
+
+    # Get integrations for a guild
+    # @param guild_id [String, Snowflake] Guild ID
+    # @return [Array<Hash>] Integration payloads
+    def guild_integrations(guild_id)
+      @rest.get("/guilds/#{guild_id}/integrations")
+    end
+
+    # Delete a guild integration
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param integration_id [String, Snowflake] Integration ID
+    # @param reason [String, nil] Audit log reason
+    # @return [void]
+    def delete_guild_integration(guild_id, integration_id, reason: nil)
+      @rest.delete("/guilds/#{guild_id}/integrations/#{integration_id}", headers: audit_log_headers(reason))
+    end
+
+    # Get guild widget settings
+    # @param guild_id [String, Snowflake] Guild ID
+    # @return [Hash, nil] Widget settings
+    def guild_widget_settings(guild_id)
+      @rest.get("/guilds/#{guild_id}/widget")
+    rescue RestClient::NotFoundError
+      nil
+    end
+
+    # Modify guild widget settings
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param enabled [Boolean, nil] Whether widget is enabled
+    # @param channel_id [String, Snowflake, nil] Widget channel ID
+    # @param reason [String, nil] Audit log reason
+    # @return [Hash] Updated widget settings
+    def modify_guild_widget(guild_id, enabled: nil, channel_id: nil, reason: nil)
+      payload = { enabled: enabled, channel_id: channel_id&.to_s }.compact
+      @rest.patch("/guilds/#{guild_id}/widget", body: payload, headers: audit_log_headers(reason))
+    end
+
+    # Get guild widget data
+    # @param guild_id [String, Snowflake] Guild ID
+    # @return [Hash, nil] Widget payload
+    def guild_widget(guild_id)
+      @rest.get("/guilds/#{guild_id}/widget.json")
+    rescue RestClient::NotFoundError
+      nil
+    end
+
+    # Get a guild vanity URL
+    # @param guild_id [String, Snowflake] Guild ID
+    # @return [Hash, nil] Vanity URL payload
+    def guild_vanity_url(guild_id)
+      @rest.get("/guilds/#{guild_id}/vanity-url")
+    rescue RestClient::NotFoundError
+      nil
+    end
+
+    # Build a guild widget image URL
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param style [String, nil] Widget image style
+    # @return [String] Widget image URL
+    def guild_widget_image(guild_id, style: nil)
+      url = "https://discord.com/api/guilds/#{guild_id}/widget.png"
+      style ? "#{url}?style=#{CGI.escape(style)}" : url
+    end
+
+    # Get a guild welcome screen
+    # @param guild_id [String, Snowflake] Guild ID
+    # @return [Hash, nil] Welcome screen payload
+    def guild_welcome_screen(guild_id)
+      @rest.get("/guilds/#{guild_id}/welcome-screen")
+    rescue RestClient::NotFoundError
+      nil
+    end
+
+    # Modify a guild welcome screen
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param enabled [Boolean, nil] Whether enabled
+    # @param welcome_channels [Array<Hash>, nil] Welcome channel configuration
+    # @param description [String, nil] Welcome description
+    # @param reason [String, nil] Audit log reason
+    # @return [Hash] Updated welcome screen payload
+    def modify_guild_welcome_screen(guild_id, enabled: nil, welcome_channels: nil, description: nil, reason: nil)
+      payload = {
+        enabled: enabled,
+        welcome_channels: welcome_channels,
+        description: description
+      }.compact
+      @rest.patch("/guilds/#{guild_id}/welcome-screen", body: payload, headers: audit_log_headers(reason))
+    end
+
+    # Get guild onboarding
+    # @param guild_id [String, Snowflake] Guild ID
+    # @return [Hash, nil] Onboarding payload
+    def guild_onboarding(guild_id)
+      @rest.get("/guilds/#{guild_id}/onboarding")
+    rescue RestClient::NotFoundError
+      nil
+    end
+
+    # Modify guild onboarding
+    # @param guild_id [String, Snowflake] Guild ID
+    # @param options [Hash] Raw onboarding payload
+    # @return [Hash] Updated onboarding payload
+    def modify_guild_onboarding(guild_id, **options)
+      @rest.put("/guilds/#{guild_id}/onboarding", body: options)
     end
 
     # Create guild channel (simplified)
@@ -700,6 +1151,131 @@ module DiscordRDA
     def bulk_delete_messages(channel_id, message_ids, reason: nil)
       headers = reason ? { 'X-Audit-Log-Reason' => CGI.escape(reason) } : {}
       @rest.post("/channels/#{channel_id}/messages/bulk-delete", body: { messages: message_ids.map(&:to_s) }, headers: headers)
+    end
+
+    # Modify the bot user's profile
+    # @param username [String, nil] New username
+    # @param avatar [File, String, nil] New avatar
+    # @return [User, nil] Updated user
+    def modify_current_user(username: nil, avatar: nil)
+      User.modify_current_user(username: username, avatar: avatar)
+    end
+
+    # Get the current user's guilds
+    # @param limit [Integer] Max guilds to return
+    # @param after [String, Snowflake, nil] Cursor
+    # @param before [String, Snowflake, nil] Cursor
+    # @param with_counts [Boolean] Include approximate counts
+    # @return [Array<Hash>] Partial guild payloads
+    def current_user_guilds(limit: 200, after: nil, before: nil, with_counts: false)
+      User.get_current_user_guilds(limit: limit, after: after&.to_s, before: before&.to_s, with_counts: with_counts)
+    end
+
+    # Get the current user's member object in a guild
+    # @param guild_id [String, Snowflake] Guild ID
+    # @return [Hash, nil] Member payload
+    def current_user_guild_member(guild_id)
+      User.get_current_user_guild_member(guild_id)
+    end
+
+    # Leave a guild as the current user
+    # @param guild_id [String, Snowflake] Guild ID
+    # @return [void]
+    def leave_guild(guild_id)
+      User.leave_guild(guild_id)
+    end
+
+    # Create a DM channel with a user
+    # @param user_id [String, Snowflake] Target user ID
+    # @return [Channel] DM channel
+    def create_dm(user_id)
+      data = @rest.post('/users/@me/channels', body: { recipient_id: user_id.to_s })
+      Channel.new(data)
+    end
+
+    # Get OAuth2 connections for the current user
+    # @return [Array<Hash>] User connections
+    def current_user_connections
+      User.get_connections
+    end
+
+    # Get application role connection metadata for the current user
+    # @param application_id [String, Snowflake] Application ID
+    # @return [Hash, nil] Role connection payload
+    def application_role_connection(application_id)
+      User.get_application_role_connection(application_id)
+    end
+
+    # Update application role connection metadata for the current user
+    # @param application_id [String, Snowflake] Application ID
+    # @param platform_name [String, nil] Platform name
+    # @param platform_username [String, nil] Platform username
+    # @param metadata [Hash] Metadata payload
+    # @return [Hash, nil] Updated role connection payload
+    def update_application_role_connection(application_id, platform_name: nil, platform_username: nil, metadata: {})
+      User.update_application_role_connection(
+        application_id,
+        platform_name: platform_name,
+        platform_username: platform_username,
+        metadata: metadata
+      )
+    end
+
+    # Get current bot application metadata
+    # @return [Hash] Application payload
+    def application_info
+      @rest.get('/oauth2/applications/@me')
+    end
+
+    # Get current authorization information
+    # @return [Hash] Authorization payload
+    def authorization_info
+      @rest.get('/oauth2/@me')
+    end
+
+    # Get gateway information
+    # @return [Hash] Gateway payload
+    def gateway
+      @rest.get('/gateway')
+    end
+
+    # Get gateway bot information
+    # @return [Hash] Gateway bot payload
+    def gateway_bot
+      @rest.get('/gateway/bot')
+    end
+
+    private
+
+    def audit_log_headers(reason)
+      reason ? { 'X-Audit-Log-Reason' => CGI.escape(reason) } : {}
+    end
+
+    def register_application_command(cmd, name:, guild_id: nil)
+      cmd.instance_variable_set(:@application_id, me.id.to_s) rescue nil
+      cmd.instance_variable_set(:@guild_id, guild_id.to_s) if guild_id
+
+      key = guild_id ? "#{name}:#{guild_id}" : name
+      @slash_commands[key] = cmd
+
+      if cmd.application_id
+        if guild_id
+          cmd.create_guild(self, guild_id)
+        else
+          cmd.create_global(self)
+        end
+      end
+
+      @logger.info('Registered application command', name: name, type: cmd.command_type, guild: guild_id || 'global')
+      cmd
+    end
+
+    def configure_entity_apis(client)
+      Message.api = client
+      Interaction.api = client
+      User.api = client
+      Guild.api = client
+      Channel.api = client
     end
 
     def setup_interaction_handlers

@@ -3,7 +3,7 @@
 require 'async/websocket'
 require 'async/http/internet'
 require 'async/http/endpoint'
-require 'async/io/stream'
+require 'io/stream'
 require 'zlib'
 
 module DiscordRDA
@@ -74,7 +74,7 @@ module DiscordRDA
       @heartbeat_task = nil
       @websocket = nil
       @zlib = nil
-      @buffer = +'')
+      @buffer = +''
       @last_heartbeat_ack = Time.now
       @resume_gateway_url = nil
     end
