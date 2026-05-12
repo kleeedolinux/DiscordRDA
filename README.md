@@ -28,17 +28,20 @@ The library now exposes a much broader Discord REST surface than the original qu
 - **Component V2**: Latest Discord components (buttons, selects, containers)
 
 ### Enterprise Features
+- **Instant Restarts**: Exec-based restart flow that preserves gateway resume state
 - **Zero-Downtime Resharding**: Add shards without stopping the bot
 - **Hot Reload**: File system event-based code reloading
 - **Session Transfer**: Migrate guilds between shards seamlessly
 - **REST Proxy Support**: Horizontal scaling with proxy servers
 - **State Preservation**: Maintain sessions across reloads
+- **Execution Supervision**: Command timeouts, concurrency limits, and failure circuit breaking
 
 ### Extended REST Coverage
 - **Threads**: Create, join, leave, archive, and manage thread members
 - **Webhooks**: Fetch, mutate, and edit webhook-owned messages
 - **Guild Admin**: Invites, prune, widget, vanity URL, welcome screen, onboarding
 - **Current User**: DM creation, guild listing, connections, role connections
+- **Persistence**: Built-in ActiveRecord bootstrap and migration helpers
 
 ## Installation
 
@@ -168,6 +171,38 @@ end
 
 # Edit a webhook message
 bot.edit_webhook_message(webhook_id, webhook_token, message_id, content: 'Updated from DiscordRDA')
+```
+
+## Resilience
+
+```ruby
+bot.slash('rebuild', 'Run a risky rebuild task') do |cmd|
+  cmd.timeout(10)
+  cmd.max_concurrency(1)
+  cmd.circuit_breaker(failures: 3, cooldown: 120)
+
+  cmd.handler do |interaction|
+    interaction.respond(content: 'Started safely', ephemeral: true)
+  end
+end
+
+# For memory-bound or untrusted work, use an isolated subprocess:
+result = bot.supervisor.run_isolated(
+  ruby_code: "puts({ ok: true }.to_json)",
+  timeout_seconds: 5,
+  memory_limit_mb: 128
+)
+```
+
+## ActiveRecord
+
+```ruby
+bot.enable_active_record(database_url: ENV['DATABASE_URL'])
+
+class GuildSetting < DiscordRDA::Record
+end
+
+bot.active_record.migrate
 ```
 
 ## Components

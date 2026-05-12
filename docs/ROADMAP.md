@@ -36,7 +36,7 @@ This document provides a complete status of DiscordRDA implementation.
 | **Horizontal Scaling** | ✅ Implemented | Distributed state sync via proxy |
 | **Hot Reload** | ✅ Implemented | Listen gem with file system events |
 | **State Preservation** | ✅ Implemented | Session IDs and sequences preserved across reloads |
-| **Instant Restarts** | 🔄 Partial | Needs process manager integration for true zero-downtime |
+| **Instant Restarts** | ✅ Implemented | Exec-based restart with preserved gateway resume state |
 
 ### Caching System
 
