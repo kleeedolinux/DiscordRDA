@@ -109,8 +109,8 @@ This document provides a complete status of DiscordRDA implementation.
 | **Get Pinned Messages** | ✅ Implemented | `Bot#pinned_messages` |
 | **Pin Message** | ✅ Implemented | `Bot#pin_message` and `Message#pin` |
 | **Unpin Message** | ✅ Implemented | `Bot#unpin_message` and `Message#unpin` |
-| **Group DM Add Recipient** | ❌ Not Implemented | |
-| **Group DM Remove Recipient** | ❌ Not Implemented | |
+| **Group DM Add Recipient** | ✅ Implemented | `Bot#add_group_dm_recipient` |
+| **Group DM Remove Recipient** | ✅ Implemented | `Bot#remove_group_dm_recipient` |
 | **Start Thread from Message** | ✅ Implemented | `Bot#start_thread_from_message` |
 | **Start Thread without Message** | ✅ Implemented | `Bot#start_thread` |
 | **Join Thread** | ✅ Implemented | `Bot#join_thread` |
@@ -139,10 +139,10 @@ This document provides a complete status of DiscordRDA implementation.
 | **Get Guild Member** | ✅ Implemented | Fetch single member with caching |
 | **List Guild Members** | ✅ Implemented | Pagination with limit/after/before support |
 | **Search Guild Members** | ✅ Implemented | Query-based search with full filtering |
-| **Add Guild Member** | ❌ Not Implemented | OAuth2 add member |
+| **Add Guild Member** | ✅ Implemented | `Bot#add_guild_member` OAuth2 flow |
 | **Modify Guild Member** | ✅ Implemented | Nick, roles, voice state, timeout support |
-| **Modify Current Member** | ❌ Not Implemented | Modify self nickname |
-| **Modify Current User Nick** | ❌ Not Implemented | Modify self nickname |
+| **Modify Current Member** | ✅ Implemented | `Bot#modify_current_member` |
+| **Modify Current User Nick** | ✅ Implemented | `Bot#modify_current_user_nick` |
 | **Add Guild Member Role** | ✅ Implemented | Add role to member with audit log |
 | **Remove Guild Member Role** | ✅ Implemented | Remove role from member with audit log |
 | **Remove Guild Member** | ✅ Implemented | Kick member with reason and audit log |
@@ -154,7 +154,7 @@ This document provides a complete status of DiscordRDA implementation.
 | **Get Guild Role** | ✅ Implemented | Via role_objects/role methods |
 | **Create Guild Role** | ✅ Implemented | Full role creation with all options |
 | **Modify Guild Role** | ✅ Implemented | Full role editing with all properties |
-| **Modify Guild Role Positions** | ❌ Not Implemented | |
+| **Modify Guild Role Positions** | ✅ Implemented | `Bot#modify_guild_role_positions` |
 | **Delete Guild Role** | ✅ Implemented | Delete role with full audit log |
 | **Get Guild Prune Count** | ✅ Implemented | `Bot#guild_prune_count` |
 | **Begin Guild Prune** | ✅ Implemented | `Bot#begin_guild_prune` |
@@ -249,15 +249,15 @@ This document provides a complete status of DiscordRDA implementation.
 |---------|--------|-------|
 | **Get Gateway** | ✅ Implemented | |
 | **Get Gateway Bot** | ✅ Implemented | Used for sharding |
-| **Sticker Operations** | ❌ Not Implemented | |
-| **Guild Scheduled Events** | ❌ Not Implemented | |
-| **Guild Template Operations** | ❌ Not Implemented | |
-| **Stage Instance Operations** | ❌ Not Implemented | |
-| **Audit Log** | ❌ Not Implemented | |
-| **Auto Moderation** | ❌ Not Implemented | |
-| **Entitlements (Monetization)** | ❌ Not Implemented | |
-| **SKU (Monetization)** | ❌ Not Implemented | |
-| **Soundboard** | ❌ Not Implemented | |
+| **Sticker Operations** | ✅ Implemented | Guild sticker CRUD, standard sticker fetch, pack listing |
+| **Guild Scheduled Events** | ✅ Implemented | CRUD plus subscriber listing |
+| **Guild Template Operations** | ✅ Implemented | Fetch, create, sync, modify, delete, and instantiate from template |
+| **Stage Instance Operations** | ✅ Implemented | Create, fetch, modify, delete |
+| **Audit Log** | ✅ Implemented | `Bot#guild_audit_log` |
+| **Auto Moderation** | ✅ Implemented | Rule CRUD via `AutoModerationRule` and `Bot` helpers |
+| **Entitlements (Monetization)** | ✅ Implemented | List, create test, delete test, consume |
+| **SKU (Monetization)** | ✅ Implemented | `Bot#skus` |
+| **Soundboard** | ✅ Implemented | Default sounds, guild sound CRUD, send soundboard sound |
 
 ---
 
@@ -277,9 +277,9 @@ This document provides a complete status of DiscordRDA implementation.
 | **Sticker** | ✅ Implemented | Full props, URL generation, guild sticker management |
 | **Interaction** | ✅ Complete | Full slash command, component, modal support |
 | **Interaction Event** | ✅ Implemented | Full event with interaction handler | |
-| **Audit Log Entry** | ❌ Not Implemented | | |
-| **Application** | ❌ Not Implemented | | |
-| **Team** | ❌ Not Implemented | | |
+| **Audit Log Entry** | 🔄 Partial | Raw audit log payloads available via `Bot#guild_audit_log` | |
+| **Application** | ✅ Implemented | Core metadata, owner, team |
+| **Team** | ✅ Implemented | Core metadata and member access |
 
 ---
 
@@ -366,11 +366,11 @@ This document provides a complete status of DiscordRDA implementation.
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| **Docker Support** | ❌ Not Implemented | Dockerfile needed |
+| **Docker Support** | ✅ Implemented | `Dockerfile` and `.dockerignore` added |
 | **Kubernetes Operator** | ❌ Not Implemented | Planned for v1.0 |
-| **Process Manager Integration** | ❌ Not Implemented | systemd, supervisor configs |
-| **Graceful Shutdown** | 🔄 Partial | SIGTERM handling basic |
-| **Signal Handling** | 🔄 Partial | Basic Interrupt handling |
+| **Process Manager Integration** | ✅ Implemented | systemd and supervisor templates added |
+| **Graceful Shutdown** | ✅ Implemented | `INT` and `TERM` traps call `Bot#stop` |
+| **Signal Handling** | ✅ Implemented | Explicit `Signal.trap` handlers for `INT` and `TERM` |
 | **Configuration Files** | ⚠️ Simplified | Ruby-only, no YAML/TOML |
 | **Environment Variables** | ✅ Implemented | Full env var support |
 | **Secrets Management** | ❌ Not Implemented | Vault integration planned |
