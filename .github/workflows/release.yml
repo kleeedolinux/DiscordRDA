@@ -20,8 +20,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          persist-credentials: false
+
+      - name: Force Bundler 2 in lockfile
+        run: |
+          sed -i '/BUNDLED WITH/{n;s/.*/   2.5.23/;}' Gemfile.lock
+          tail -n 5 Gemfile.lock
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
