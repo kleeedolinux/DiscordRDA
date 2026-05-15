@@ -61,7 +61,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Configure RubyGems credentials
+        uses: rubygems/configure-rubygems-credentials@v1
+
       - name: Publish to RubyGems.org
-        uses: rubygems/release-gem@v1
-        with:
-          await-release: false
+        run: |
+          gem push *.gem
