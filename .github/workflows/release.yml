@@ -16,6 +16,7 @@ jobs:
   release:
     name: Build and Release Gem
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -26,6 +27,7 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.0'
+          bundler: '2.5.23'
           bundler-cache: true
 
       - name: Get version
@@ -41,7 +43,6 @@ jobs:
           ls -la *.gem
 
       - name: Create GitHub Release
-        id: create_release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.get_version.outputs.version }}
