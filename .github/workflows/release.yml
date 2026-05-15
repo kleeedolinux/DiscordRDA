@@ -2,6 +2,11 @@ name: Release Gem
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (leave empty to use version.rb)'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -32,7 +37,7 @@ jobs:
         id: get_version
         run: |
           VERSION=$(ruby -I lib -r discord_rda/version -e "puts DiscordRDA::VERSION")
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Detected version: $VERSION"
 
       - name: Build gem
@@ -45,11 +50,19 @@ jobs:
         with:
           tag_name: v${{ steps.get_version.outputs.version }}
           name: discord_rda v${{ steps.get_version.outputs.version }}
-          files: "*.gem"
+          body: |
+            ## discord_rda v${{ steps.get_version.outputs.version }}
+
+            See [CHANGELOG.md](./CHANGELOG.md) for details.
+          draft: false
+          prerelease: false
+          files: |
+            *.gem
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Configure RubyGems credentials
+        uses: rubygems/configure-rubygems-credentials@762a4b77c3300434bb57c7ce80b20e36231927aa
+
       - name: Publish to RubyGems.org
-        uses: rubygems/release-gem@762a4b77c3300434bb57c7ce80b20e36231927aa
-        with:
-          await-release: false
+        run: gem push *.gem
